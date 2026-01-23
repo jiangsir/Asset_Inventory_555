@@ -64,6 +64,12 @@ const sheetApi = {
       }
 
       const result = await response.json();
+      
+      // 如果有調試信息，打印到 console
+      if (result.debug) {
+        console.log('%c[API DEBUG]', 'color: #0066cc; font-weight: bold', result.debug);
+      }
+      
       return result;
 
     } catch (error) {

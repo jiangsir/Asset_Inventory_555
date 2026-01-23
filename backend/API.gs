@@ -79,12 +79,24 @@ function handleGetAsset(assetCode) {
     if (asset) {
       return sendResponse({
         success: true,
-        asset: asset
+        asset: asset,
+        debug: {
+          action: 'getAsset',
+          code: assetCode,
+          found: true,
+          timestamp: new Date().toISOString()
+        }
       });
     } else {
       return sendResponse({
         success: false,
-        error: '未找到該編號的財產'
+        error: '未找到該編號的財產',
+        debug: {
+          action: 'getAsset',
+          code: assetCode,
+          found: false,
+          timestamp: new Date().toISOString()
+        }
       }, 404);
     }
   } catch(error) {
@@ -104,7 +116,13 @@ function handleSearchAssets(query) {
     const results = SheetManager.searchAssets(query, 10);
     return sendResponse({
       success: true,
-      results: results
+      results: results,
+      debug: {
+        action: 'searchAssets',
+        query: query,
+        resultCount: results.length,
+        timestamp: new Date().toISOString()
+      }
     });
   } catch(error) {
     return sendResponse({success: false, error: error.toString()}, 500);

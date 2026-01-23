@@ -47,17 +47,33 @@ const SheetManager = {
    */
   getAssetByCode: function(code) {
     code = String(code).trim();
+    const sheet = this.getSheet();
+    const sheetName = sheet ? sheet.getName() : '未知';
+    
+    Logger.log(`[getAssetByCode] Sheet名稱: ${sheetName}`);
+    Logger.log(`[getAssetByCode] 查詢編號: ${code}`);
+    Logger.log(`[getAssetByCode] 搜索欄位: B (財產編號)`);
+    
     const data = this.getAllData();
     
-    if (!data || data.length < 2) return null;
+    if (!data || data.length < 2) {
+      Logger.log(`[getAssetByCode] 數據為空或不足2行，返回null`);
+      return null;
+    }
+    
+    Logger.log(`[getAssetByCode] 數據總行數: ${data.length}`);
     
     // 從第2行開始查找（第1行是標題）
     for (let i = 1; i < data.length; i++) {
-      if (String(data[i][this.COLUMNS.B.index]).trim() === code) {
+      const cellValue = String(data[i][this.COLUMNS.B.index]).trim();
+      Logger.log(`[getAssetByCode] 第 ${i+1} 行比較: "${cellValue}" === "${code}" ?`);
+      if (cellValue === code) {
+        Logger.log(`[getAssetByCode] 找到匹配於第 ${i+1} 行`);
         return this.formatAssetData(data[i], i);
       }
     }
     
+    Logger.log(`[getAssetByCode] 未找到匹配的編號`);
     return null;
   },
 
@@ -66,9 +82,21 @@ const SheetManager = {
    */
   searchAssets: function(query, limit = 10) {
     query = String(query).toLowerCase().trim();
+    const sheet = this.getSheet();
+    const sheetName = sheet ? sheet.getName() : '未知';
+    
+    Logger.log(`[searchAssets] Sheet名稱: ${sheetName}`);
+    Logger.log(`[searchAssets] 搜索關鍵詞: ${query}`);
+    Logger.log(`[searchAssets] 搜索欄位: B (財產編號) 和 C (財產名稱)`);
+    
     const data = this.getAllData();
     
-    if (!data || data.length < 2) return [];
+    if (!data || data.length < 2) {
+      Logger.log(`[searchAssets] 數據為空或不足2行，返回空陣列`);
+      return [];
+    }
+    
+    Logger.log(`[searchAssets] 數據總行數: ${data.length}`);
     
     const results = [];
     
@@ -77,10 +105,12 @@ const SheetManager = {
       const name = String(data[i][this.COLUMNS.C.index]).toLowerCase();
       
       if (code.includes(query) || name.includes(query)) {
+        Logger.log(`[searchAssets] 第 ${i+1} 行匹配 - 編號: ${code}, 名稱: ${name}`);
         results.push(this.formatAssetData(data[i], i));
       }
     }
     
+    Logger.log(`[searchAssets] 找到 ${results.length} 個結果`);
     return results;
   },
 
