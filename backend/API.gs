@@ -234,17 +234,10 @@ function handleDeletePhoto(data) {
  * 創建支持 CORS 的 JSON 響應
  */
 function createCorsResponse(data) {
-  // 使用 HtmlService 來設置響應頭
+  // 使用 ContentService 來創建 JSON 響應
   const html = JSON.stringify(data);
-  const output = HtmlService.createHtmlOutput(html);
-  output.setMimeType(HtmlService.MimeType.JSON);
-  
-  // 嘗試設置 CORS headers（如果支持）
-  try {
-    output.setXFrameOptionMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-  } catch(e) {
-    // 如果不支持，忽略
-  }
+  const output = ContentService.createTextOutput(html);
+  output.setMimeType(ContentService.MimeType.JSON);
   
   return output;
 }
