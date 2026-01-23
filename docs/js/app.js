@@ -47,14 +47,31 @@ const app = {
   loadConfig: function() {
     const saved = localStorage.getItem('appConfig');
     if (saved) {
-      const loaded = JSON.parse(saved);
-      Object.assign(this.config, loaded);
+      try {
+        const loaded = JSON.parse(saved);
+        // 只載入有效的設置，保留默認的 gasUrl
+        if (loaded.sheetName) this.config.sheetName = loaded.sheetName;
+        if (loaded.offlineMode !== undefined) this.config.offlineMode = loaded.offlineMode;
+        if (loaded.photoLimit !== undefined) this.config.photoLimit = loaded.photoLimit;
+        if (loaded.debug !== undefined) this.config.debug = loaded.debug;
+        // 只在有效的 URL 時才覆蓋 gasUrl
+        if (loaded.gasUrl && loaded.gasUrl.includes('script.google.com')) {
+          this.config.gasUrl = loaded.gasUrl;
+        }
+      } catch (e) {
+        console.warn('設置讀取失敗，使用默認設置');
+      }
     }
 
     // 如果未配置 GAS URL，提示用戶
     if (!this.config.gasUrl) {
       console.warn('未配置 GAS URL，請在設置中配置');
-      ui.showNotification('warning', '未配置', '請在設置中填寫 Spreadsheet 和 API 地址');
+      // 延遲顯示通知，確保 UI 已初始化
+      setTimeout(() => {
+        if (ui && ui.showNotification) {
+          ui.showNotification('warning', '未配置', '請在設置中填寫 API 地址');
+        }
+      }, 500);
     }
   },
 
