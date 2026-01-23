@@ -276,7 +276,7 @@ function createCorsResponse(data) {
  * 發送 JSON 響應（帶 CORS headers）
  */
 function sendResponse(data, statusCode = 200) {
-  return createCorsResponse(data);
+  return data;
 }
 
 /**
