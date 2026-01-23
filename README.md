@@ -2,6 +2,9 @@
 
 一個完整的行動盤點解決方案，整合 GitHub Pages、Google Apps Script 和 Google Spreadsheet，支持手機掃描條碼、拍照上傳和數據管理。
 
+發布網址：
+https://jiangsir.github.io/Asset_Inventory_555/
+
 ## 📱 核心功能
 
 ### ✅ 已實現功能

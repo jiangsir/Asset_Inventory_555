@@ -9,7 +9,7 @@
 
 const app = {
   config: {
-    gasUrl: '', // 需要在設置中配置
+    gasUrl: 'https://script.google.com/macros/s/AKfycbxWRMdDuVXE-EIAQ_newRtBMvcAHNKxXTWv7zQ4KL5z1vT85zNteOQUPmEj8Yrj1ME5/exec',
     sheetName: '財產列表',
     offlineMode: false,
     photoLimit: 10,
