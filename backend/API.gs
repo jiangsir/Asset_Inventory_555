@@ -75,6 +75,9 @@ function handleGetAsset(assetCode) {
   }
   
   try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('財產列表');
+    const sheetName = sheet ? sheet.getName() : '未知';
+    
     const asset = SheetManager.getAssetByCode(assetCode);
     if (asset) {
       return sendResponse({
@@ -82,6 +85,7 @@ function handleGetAsset(assetCode) {
         asset: asset,
         debug: {
           action: 'getAsset',
+          sheetName: sheetName,
           code: assetCode,
           found: true,
           timestamp: new Date().toISOString()
@@ -93,6 +97,7 @@ function handleGetAsset(assetCode) {
         error: '未找到該編號的財產',
         debug: {
           action: 'getAsset',
+          sheetName: sheetName,
           code: assetCode,
           found: false,
           timestamp: new Date().toISOString()
