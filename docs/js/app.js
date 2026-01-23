@@ -25,12 +25,14 @@ const app = {
     // 載入設置
     this.loadConfig();
 
-    // 初始化模塊
+    // 初始化 API 客戶端必須優先（ui.init 會使用）
+    sheetApi.init(this.config.gasUrl);
+
+    // 初始化其他模塊
     dataManager.init();
     ui.init();
     scanner.init();
     camera.init();
-    sheetApi.init(this.config.gasUrl);
 
     // 綁定事件監聽器
     this.bindEventListeners();
