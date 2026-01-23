@@ -20,27 +20,29 @@ const ui = {
    * 綁定 UI 事件
    */
   attachEventListeners: function() {
-    // 設置保存
-    document.getElementById('spreadsheetId').addEventListener('blur', (e) => {
-      app.config.gasUrl = e.target.value;
-      sheetApi.init(app.config.gasUrl);
-    });
+    // 離線模式
+    const offlineModeCheckbox = document.getElementById('offlineMode');
+    if (offlineModeCheckbox) {
+      offlineModeCheckbox.addEventListener('change', (e) => {
+        app.config.offlineMode = e.target.checked;
+      });
+    }
 
-    document.getElementById('sheetName').addEventListener('blur', (e) => {
-      app.config.sheetName = e.target.value;
-    });
+    // 調試信息
+    const debugCheckbox = document.getElementById('showDebugInfo');
+    if (debugCheckbox) {
+      debugCheckbox.addEventListener('change', (e) => {
+        app.config.debug = e.target.checked;
+      });
+    }
 
-    document.getElementById('offlineMode').addEventListener('change', (e) => {
-      app.config.offlineMode = e.target.checked;
-    });
-
-    document.getElementById('showDebugInfo').addEventListener('change', (e) => {
-      app.config.debug = e.target.checked;
-    });
-
-    document.getElementById('photoLimit').addEventListener('change', (e) => {
-      app.config.photoLimit = parseInt(e.target.value) || 10;
-    });
+    // 照片上限
+    const photoLimitSelect = document.getElementById('photoLimit');
+    if (photoLimitSelect) {
+      photoLimitSelect.addEventListener('change', (e) => {
+        app.config.photoLimit = parseInt(e.target.value) || 10;
+      });
+    }
   },
 
   /**
