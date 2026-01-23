@@ -118,12 +118,16 @@ function handleSearchAssets(query) {
   }
   
   try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('財產列表');
+    const sheetName = sheet ? sheet.getName() : '未知';
+    
     const results = SheetManager.searchAssets(query, 10);
     return sendResponse({
       success: true,
       results: results,
       debug: {
         action: 'searchAssets',
+        sheetName: sheetName,
         query: query,
         resultCount: results.length,
         timestamp: new Date().toISOString()
