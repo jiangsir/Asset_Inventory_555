@@ -29,14 +29,17 @@ const sheetApi = {
 
     try {
       const options = {
-        method: method,
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        method: method
       };
 
-      if (method === 'POST' && data) {
-        options.body = JSON.stringify(data);
+      // 只在 POST 時添加 Content-Type header，避免 CORS preflight
+      if (method === 'POST') {
+        options.headers = {
+          'Content-Type': 'application/json'
+        };
+        if (data) {
+          options.body = JSON.stringify(data);
+        }
       }
 
       // 構建 URL
