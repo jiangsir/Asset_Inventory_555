@@ -9,8 +9,14 @@
 
 const app = {
   config: {
+    // GAS API 配置
     gasUrl: 'https://script.google.com/macros/s/AKfycbxWRMdDuVXE-EIAQ_newRtBMvcAHNKxXTWv7zQ4KL5z1vT85zNteOQUPmEj8Yrj1ME5/exec',
+    
+    // Google Spreadsheet 配置
+    spreadsheetId: '1DT_hQlOCNr7WN8gLysO3Y9WFB8hYYroeHWMRxTzprDs',
     sheetName: '財產列表',
+    
+    // 應用配置
     offlineMode: false,
     photoLimit: 10,
     debug: false

@@ -102,10 +102,7 @@ const ui = {
    * 顯示設置界面
    */
   showSettings: function() {
-    // 載入當前設置
-    document.getElementById('gasUrl').value = app.config.gasUrl || '';
-    document.getElementById('spreadsheetId').value = app.config.spreadsheetId || '';
-    document.getElementById('sheetName').value = app.config.sheetName;
+    // 載入當前設置（API URL 和 Spreadsheet ID 已硬編碼在 config）
     document.getElementById('offlineMode').checked = app.config.offlineMode;
     document.getElementById('showDebugInfo').checked = app.config.debug;
     document.getElementById('photoLimit').value = app.config.photoLimit;
@@ -117,26 +114,14 @@ const ui = {
    * 保存設置
    */
   saveSettings: function() {
-    // 從表單讀取設置值
-    app.config.gasUrl = document.getElementById('gasUrl').value.trim();
-    app.config.spreadsheetId = document.getElementById('spreadsheetId').value.trim();
-    app.config.sheetName = document.getElementById('sheetName').value.trim() || '財產列表';
+    // 從表單讀取應用設置（API URL 和 Spreadsheet ID 不可修改）
     app.config.offlineMode = document.getElementById('offlineMode').checked;
     app.config.debug = document.getElementById('showDebugInfo').checked;
     app.config.photoLimit = parseInt(document.getElementById('photoLimit').value);
 
-    // 驗證必要的設置
-    if (!app.config.gasUrl) {
-      this.showNotification('error', '缺少配置', '請輸入 GAS API 地址');
-      return;
-    }
-
-    // 重新初始化 API
-    sheetApi.init(app.config.gasUrl);
-
     // 保存設置
     app.saveConfig();
-    this.showNotification('success', '已保存', '設置已保存並生效');
+    this.showNotification('success', '已保存', '設置已保存');
     setTimeout(() => this.backToScan(), 1500);
   },
 
