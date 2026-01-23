@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="財產盤點系統 555 - 行動盤點應用">
+    <meta name="theme-color" content="#2196F3">
+    
+    <title>財產盤點系統 555</title>
+    
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/responsive.css">
+    <link rel="manifest" href="manifest.json">
+</head>
+<body>
+    <!-- 頂部導航 -->
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <h1>📦 財產盤點系統 555</h1>
+        </div>
+        <div class="navbar-menu">
+            <button id="syncBtn" class="btn-icon" title="同步數據" onclick="ui.syncData()">
+                ⟳ 同步
+            </button>
+            <button id="settingsBtn" class="btn-icon" title="設置" onclick="ui.showSettings()">
+                ⚙️ 設置
+            </button>
+        </div>
+    </nav>
+
+    <!-- 主容器 -->
+    <div class="container">
+        <!-- 1. 掃描/搜索界面 -->
+        <section id="scanSection" class="screen active">
+            <div class="screen-header">
+                <h2>🔍 掃描或搜索財產</h2>
+            </div>
+
+            <div class="screen-content">
+                <!-- 輸入框 -->
+                <div class="input-group">
+                    <input 
+                        type="text" 
+                        id="assetCodeInput" 
+                        class="input-field"
+                        placeholder="掃描條碼或輸入編號..."
+                        autocomplete="off"
+                    >
+                    <button class="btn-primary" onclick="scanner.openCamera()">
+                        📷 打開相機
+                    </button>
+                </div>
+
+                <!-- 掃描快捷鍵提示 -->
+                <div class="hint-box">
+                    <p>💡 按 <code>Enter</code> 鍵直接查詢</p>
+                    <p>💡 或點擊「打開相機」掃描條碼</p>
+                </div>
+
+                <!-- 最近掃描歷史 -->
+                <div class="recent-list" id="recentList">
+                    <h3>最近查詢</h3>
+                    <div id="recentItemsContainer" class="items-grid">
+                        <!-- 動態生成 -->
+                    </div>
+                </div>
+
+                <!-- 快速搜索建議 -->
+                <div class="search-suggestions" id="searchSuggestions" style="display: none;">
+                    <div id="suggestionsContainer" class="items-grid">
+                        <!-- 動態生成 -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. 詳情查看界面 -->
+        <section id="detailSection" class="screen">
+            <div class="screen-header">
+                <button class="btn-back" onclick="ui.backToScan()">← 返回</button>
+                <h2 id="detailTitle">財產詳情</h2>
+                <span class="spacer"></span>
+            </div>
+
+            <div class="screen-content">
+                <!-- 只讀欄位顯示 -->
+                <div class="details-readonly">
+                    <h3>基本信息</h3>
+                    <div class="field-row">
+                        <span class="label">財產編號</span>
+                        <span id="detail-assetCode" class="value">-</span>
+                    </div>
+                    <div class="field-row">
+                        <span class="label">財產名稱</span>
+                        <span id="detail-assetName" class="value">-</span>
+                    </div>
+                    <div class="field-row">
+                        <span class="label">購置日期</span>
+                        <span id="detail-purchaseDate" class="value">-</span>
+                    </div>
+                    <div class="field-row">
+                        <span class="label">使用單位</span>
+                        <span id="detail-unit" class="value">-</span>
+                    </div>
+                    <div class="field-row">
+                        <span class="label">型式廠牌</span>
+                        <span id="detail-model" class="value">-</span>
+                    </div>
+                    <div class="field-row">
+                        <span class="label">數量</span>
+                        <span id="detail-quantity" class="value">-</span>
+                    </div>
+                    <div class="field-row">
+                        <span class="label">單價</span>
+                        <span id="detail-unitPrice" class="value">-</span>
+                    </div>
+                    <div class="field-row">
+                        <span class="label">總價</span>
+                        <span id="detail-totalPrice" class="value">-</span>
+                    </div>
+                    <div class="field-row">
+                        <span class="label">年限</span>
+                        <span id="detail-lifespan" class="value">-</span>
+                    </div>
+                </div>
+
+                <!-- 可編輯欄位 -->
+                <form id="editForm" class="form-editable">
+                    <h3>盤點信息 (可編輯)</h3>
+
+                    <!-- 存放地點 -->
+                    <div class="form-group">
+                        <label for="edit-location">存放地點</label>
+                        <input 
+                            type="text" 
+                            id="edit-location" 
+                            class="input-field"
+                            placeholder="輸入存放地點..."
+                        >
+                        <small class="hint">例：辦公室 302 / 倉庫 A 區</small>
+                    </div>
+
+                    <!-- 備註 -->
+                    <div class="form-group">
+                        <label for="edit-remark">備註</label>
+                        <textarea 
+                            id="edit-remark" 
+                            class="input-field textarea"
+                            placeholder="輸入備註信息..."
+                            rows="3"
+                        ></textarea>
+                        <small class="hint">記錄財產狀況、損傷等信息</small>
+                    </div>
+
+                    <!-- 可否報廢 -->
+                    <div class="form-group">
+                        <label for="edit-scrappable">可否報廢</label>
+                        <select id="edit-scrappable" class="input-field">
+                            <option value="">--- 請選擇 ---</option>
+                            <option value="是">是</option>
+                            <option value="否">否</option>
+                            <option value="待評估">待評估</option>
+                        </select>
+                    </div>
+
+                    <!-- 實物照片 -->
+                    <div class="form-group">
+                        <label>實物照片</label>
+                        <div class="photos-section">
+                            <div id="photoGallery" class="photo-gallery">
+                                <!-- 動態生成 -->
+                            </div>
+                            <button type="button" class="btn-secondary" onclick="camera.addPhoto()">
+                                ➕ 添加照片
+                            </button>
+                        </div>
+                        <small class="hint" id="photoHint">已上傳 0 張 / 最多 10 張</small>
+                    </div>
+
+                    <!-- 編輯狀態 -->
+                    <div class="form-status" id="formStatus" style="display: none;">
+                        <p id="statusMessage"></p>
+                    </div>
+
+                    <!-- 操作按鈕 -->
+                    <div class="form-actions">
+                        <button type="reset" class="btn-secondary" onclick="ui.resetForm()">
+                            ↺ 重置
+                        </button>
+                        <button type="submit" class="btn-primary" onclick="ui.saveAsset(event)">
+                            💾 保存
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- 3. 設置界面 -->
+        <section id="settingsSection" class="screen">
+            <div class="screen-header">
+                <button class="btn-back" onclick="ui.backToScan()">← 返回</button>
+                <h2>⚙️ 設置</h2>
+                <span class="spacer"></span>
+            </div>
+
+            <div class="screen-content">
+                <div class="settings-group">
+                    <h3>Spreadsheet 設置</h3>
+                    <div class="form-group">
+                        <label for="spreadsheetId">Spreadsheet ID</label>
+                        <input 
+                            type="text" 
+                            id="spreadsheetId" 
+                            class="input-field"
+                            placeholder="粘貼 Spreadsheet ID..."
+                        >
+                        <small class="hint">
+                            在 Google Sheets URL 中找到：
+                            <code>docs.google.com/spreadsheets/d/<strong>THIS_ID</strong>/edit</code>
+                        </small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="sheetName">工作表名稱</label>
+                        <input 
+                            type="text" 
+                            id="sheetName" 
+                            class="input-field"
+                            placeholder="例：財產列表"
+                            value="財產列表"
+                        >
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h3>應用設置</h3>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="offlineMode">
+                            啟用離線模式（使用本地數據）
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="showDebugInfo">
+                            顯示調試信息
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="photoLimit">照片上限</label>
+                        <select id="photoLimit" class="input-field">
+                            <option value="0">無限制</option>
+                            <option value="5">5 張</option>
+                            <option value="10">10 張</option>
+                            <option value="15">15 張</option>
+                            <option value="20">20 張</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h3>數據管理</h3>
+                    <button class="btn-secondary" onclick="dataManager.exportLocalData()">
+                        📥 導出本地數據
+                    </button>
+                    <button class="btn-secondary" onclick="dataManager.clearLocalData()">
+                        🗑️ 清空本地數據
+                    </button>
+                </div>
+
+                <div class="settings-group">
+                    <h3>關于</h3>
+                    <p>
+                        <strong>財產盤點系統 555</strong><br>
+                        版本：1.0.0<br>
+                        更新日期：2026-01-23<br>
+                        <a href="https://github.com/you/Asset_Inventory_555">GitHub 倉庫</a>
+                    </p>
+                </div>
+
+                <div class="settings-actions">
+                    <button class="btn-primary" onclick="ui.saveSettings()">
+                        ✓ 保存設置
+                    </button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- 相機預覽模態框 -->
+    <div id="cameraModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📷 相機</h3>
+                <button class="btn-close" onclick="camera.closeCamera()">✕</button>
+            </div>
+            <div class="modal-body">
+                <video id="videoPreview" class="camera-preview" playsinline></video>
+                <div class="camera-controls">
+                    <button class="btn-primary" onclick="camera.takePhoto()">📸 拍照</button>
+                    <button class="btn-secondary" onclick="camera.closeCamera()">取消</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 照片預覽模態框 -->
+    <div id="photoModal" class="modal" style="display: none;">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>照片預覽</h3>
+                <button class="btn-close" onclick="camera.closePhotoPreview()">✕</button>
+            </div>
+            <div class="modal-body">
+                <img id="photoPreview" src="" alt="照片預覽" class="photo-preview">
+                <div class="modal-actions">
+                    <button class="btn-primary" onclick="camera.confirmPhoto()">✓ 確認</button>
+                    <button class="btn-secondary" onclick="camera.cancelPhoto()">✕ 重新拍照</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 加載指示器 -->
+    <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+        <div class="spinner"></div>
+        <p id="loadingText">加載中...</p>
+    </div>
+
+    <!-- 通知消息 -->
+    <div id="notificationContainer" class="notification-container"></div>
+
+    <!-- 腳本 -->
+    <script src="js/data-manager.js"></script>
+    <script src="js/sheet-api.js"></script>
+    <script src="js/barcode-scanner.js"></script>
+    <script src="js/camera.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/app.js"></script>
+
+    <!-- PWA Service Worker 註冊 (可選) -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('service-worker.js').catch(err => {
+                console.log('Service Worker 註冊失敗:', err);
+            });
+        }
+    </script>
+</body>
+</html>

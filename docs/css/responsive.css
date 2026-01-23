@@ -1,0 +1,406 @@
+/* ============================================
+   財產盤點系統 555 - 響應式設計
+   ============================================ */
+
+/* ============================================
+   手機 (小於 480px)
+   ============================================ */
+
+@media screen and (max-width: 480px) {
+    :root {
+        font-size: 14px;
+    }
+    
+    .navbar {
+        padding: 12px;
+    }
+    
+    .navbar-brand h1 {
+        font-size: 1.25rem;
+    }
+    
+    .navbar-menu {
+        gap: 8px;
+    }
+    
+    .btn-icon {
+        padding: 6px 10px;
+        font-size: 0.8rem;
+    }
+    
+    .screen-header {
+        padding: 12px;
+        gap: 8px;
+    }
+    
+    .screen-header h2 {
+        font-size: 1.1rem;
+    }
+    
+    .screen-content {
+        padding: 12px;
+    }
+    
+    .input-group {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .input-group button {
+        width: 100%;
+    }
+    
+    .items-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 8px;
+    }
+    
+    .form-actions {
+        grid-template-columns: 1fr;
+    }
+    
+    .camera-controls {
+        grid-template-columns: 1fr;
+    }
+    
+    .notification-container {
+        right: 8px;
+        left: 8px;
+        max-width: none;
+    }
+}
+
+/* ============================================
+   平板豎屏 (480px - 768px)
+   ============================================ */
+
+@media screen and (min-width: 480px) and (max-width: 768px) {
+    .items-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 12px;
+    }
+    
+    .photo-gallery {
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    }
+    
+    .form-actions {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* ============================================
+   平板橫屏 / 小型桌面 (768px - 1024px)
+   ============================================ */
+
+@media screen and (min-width: 768px) {
+    .container {
+        max-width: 800px;
+        margin: 0 auto;
+        border-left: 1px solid var(--border-color);
+        border-right: 1px solid var(--border-color);
+    }
+    
+    .items-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    }
+    
+    .photo-gallery {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    }
+    
+    .form-actions {
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    .input-group {
+        flex-direction: row;
+    }
+    
+    .input-group button {
+        width: auto;
+        flex-shrink: 0;
+    }
+}
+
+/* ============================================
+   桌面 (1024px 以上)
+   ============================================ */
+
+@media screen and (min-width: 1024px) {
+    .container {
+        max-width: 900px;
+        margin: 0 auto;
+        border-left: 1px solid var(--border-color);
+        border-right: 1px solid var(--border-color);
+    }
+    
+    .items-grid {
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    }
+    
+    .photo-gallery {
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    }
+    
+    .form-actions {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+/* ============================================
+   橫屏方向調整 (手機橫屏)
+   ============================================ */
+
+@media screen and (max-height: 500px) {
+    .navbar {
+        padding: 8px 12px;
+    }
+    
+    .navbar-brand h1 {
+        font-size: 1.1rem;
+    }
+    
+    .screen-header {
+        padding: 8px;
+    }
+    
+    .screen-header h2 {
+        font-size: 1rem;
+    }
+    
+    .screen-content {
+        padding: 8px;
+    }
+    
+    .modal-content {
+        max-height: 95%;
+    }
+}
+
+/* ============================================
+   高對比度模式 (深色模式支持)
+   ============================================ */
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --text-dark: #E0E0E0;
+        --text-light: #9E9E9E;
+        --bg-light: #303030;
+        --bg-white: #424242;
+        --border-color: #616161;
+    }
+    
+    .input-field,
+    textarea,
+    select {
+        background: var(--bg-white);
+        color: var(--text-dark);
+        border-color: var(--border-color);
+    }
+    
+    .hint-box {
+        background: rgba(33, 150, 243, 0.2);
+    }
+    
+    .item-card,
+    .details-readonly,
+    .form-editable,
+    .settings-group {
+        background: var(--bg-white);
+        border-color: var(--border-color);
+    }
+    
+    .modal-content {
+        background: var(--bg-white);
+        color: var(--text-dark);
+    }
+}
+
+/* ============================================
+   打印優化
+   ============================================ */
+
+@media print {
+    :root {
+        --primary-color: #000;
+        --primary-dark: #333;
+        --border-color: #999;
+    }
+    
+    body {
+        background: white;
+        color: black;
+    }
+    
+    .container {
+        max-width: 100%;
+        border: none;
+    }
+    
+    .btn-primary,
+    .btn-secondary,
+    .btn-back,
+    .btn-icon {
+        display: none;
+    }
+    
+    .details-readonly,
+    .form-editable {
+        box-shadow: none;
+        border: 1px solid black;
+        page-break-inside: avoid;
+    }
+    
+    .screen {
+        page-break-after: always;
+    }
+}
+
+/* ============================================
+   觸屏設備優化
+   ============================================ */
+
+@media (hover: none) and (pointer: coarse) {
+    /* 增加按鈕點擊區域 */
+    .btn-primary,
+    .btn-secondary,
+    .btn-back,
+    .btn-icon,
+    .btn-close {
+        min-height: 44px;
+        min-width: 44px;
+    }
+    
+    /* 移除懸停效果，改用活動態 */
+    .btn-primary:hover,
+    .btn-secondary:hover,
+    .item-card:hover {
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .btn-primary:active,
+    .btn-secondary:active {
+        background: var(--primary-dark);
+    }
+    
+    /* 增加表單控件大小 */
+    .input-field,
+    textarea,
+    select {
+        min-height: 44px;
+        font-size: 16px; /* 防止自動放大 */
+    }
+    
+    /* 簡化懸停效果 */
+    .notification:hover {
+        box-shadow: var(--shadow-md);
+    }
+}
+
+/* ============================================
+   大屏幕 (4K 桌面)
+   ============================================ */
+
+@media screen and (min-width: 2560px) {
+    :root {
+        font-size: 18px;
+    }
+    
+    .container {
+        max-width: 1200px;
+    }
+    
+    .items-grid {
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    }
+    
+    .photo-gallery {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+}
+
+/* ============================================
+   超大屏幕 (8K 及以上)
+   ============================================ */
+
+@media screen and (min-width: 5120px) {
+    :root {
+        font-size: 24px;
+    }
+    
+    .container {
+        max-width: 1600px;
+    }
+}
+
+/* ============================================
+   針對特定設備的優化
+   ============================================ */
+
+/* iPhone SE / 舊款機型 */
+@media screen and (max-width: 320px) {
+    :root {
+        font-size: 12px;
+    }
+    
+    .navbar-brand h1 {
+        font-size: 1rem;
+    }
+    
+    .items-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* iPhone 12/13/14 Pro Max */
+@media screen and (min-width: 414px) and (max-width: 430px) and (min-height: 896px) {
+    :root {
+        font-size: 15px;
+    }
+}
+
+/* iPad Mini */
+@media screen and (min-width: 768px) and (min-height: 1024px) {
+    .container {
+        max-width: 100%;
+    }
+    
+    .items-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .photo-gallery {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+/* iPad Pro */
+@media screen and (min-width: 1024px) and (min-height: 1366px) {
+    .items-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+    
+    .photo-gallery {
+        grid-template-columns: repeat(5, 1fr);
+    }
+}
+
+/* ============================================
+   安全區域（劉海屏、圓角等）
+   ============================================ */
+
+@supports (padding: env(safe-area-inset-top)) {
+    .navbar {
+        padding-top: max(var(--spacing-md), env(safe-area-inset-top));
+        padding-bottom: max(var(--spacing-md), env(safe-area-inset-bottom));
+        padding-left: max(var(--spacing-md), env(safe-area-inset-left));
+        padding-right: max(var(--spacing-md), env(safe-area-inset-right));
+    }
+    
+    .screen-content {
+        padding-left: max(var(--spacing-md), env(safe-area-inset-left));
+        padding-right: max(var(--spacing-md), env(safe-area-inset-right));
+        padding-bottom: max(var(--spacing-md), env(safe-area-inset-bottom));
+    }
+}
