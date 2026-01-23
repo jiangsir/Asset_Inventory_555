@@ -133,11 +133,11 @@ const app = {
    */
   queryAsset: async function(code) {
     ui.showLoading('正在查詢財產...');
-    console.log('%c[查詢財產]', 'color: #ff6600; font-weight: bold', `正在查詢編號: ${code}`);
+    console.log('%c[🔎查詢財產]', 'color: #ff6600; font-weight: bold; font-size: 12px', `正在查詢編號: "${code}"`);
 
     try {
       const asset = await sheetApi.getAsset(code);
-      console.log('%c[查詢結果]', 'color: #00aa00; font-weight: bold', asset);
+      console.log('%c[🔎查詢結果詳情]', 'color: #00aa00; font-weight: bold; font-size: 12px', asset);
 
       if (asset.success) {
         // 保存到最近查詢歷史
@@ -160,10 +160,10 @@ const app = {
    * 顯示搜索建議
    */
   showSearchSuggestions: async function(query) {
-    console.log('%c[搜索建議]', 'color: #ff6600; font-weight: bold', `搜索關鍵詞: ${query}`);
+    console.log('%c[🔍搜索建議]', 'color: #ff6600; font-weight: bold; font-size: 12px', `搜索關鍵詞: "${query}"`);
     try {
       const results = await sheetApi.searchAssets(query);
-      console.log('%c[搜索結果]', 'color: #00aa00; font-weight: bold', `找到 ${results.results?.length || 0} 個結果`, results);
+      console.log('%c[🔍搜索結果詳情]', 'color: #00aa00; font-weight: bold; font-size: 12px', `找到 ${results.results?.length || 0} 個結果`, results);
 
       if (results.success && results.results.length > 0) {
         const suggestionsDiv = document.getElementById('searchSuggestions');
