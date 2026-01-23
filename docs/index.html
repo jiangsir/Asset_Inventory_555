@@ -316,7 +316,8 @@
       });
     </script>
 
-    <!-- PWA Service Worker 註冊 (可選) -->
+    <!-- PWA Service Worker 註冊 - 調試時禁用，避免緩存問題 -->
+    <!--
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('service-worker.js').catch(err => {
@@ -324,5 +325,6 @@
             });
         }
     </script>
+    -->
 </body>
 </html>
