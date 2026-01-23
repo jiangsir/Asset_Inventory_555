@@ -16,6 +16,21 @@ const sheetApi = {
     this.apiUrl = apiUrl;
     if (!apiUrl) {
       console.warn('未配置 GAS API URL');
+    } else {
+      // 测试 API 连接
+      this.testConnection();
+    }
+  },
+
+  /**
+   * 测试 API 连接
+   */
+  testConnection: async function() {
+    try {
+      const result = await this.request('test');
+      console.log('%c[API 测试]', 'color: #00dd00; font-weight: bold; font-size: 14px', 'API 连接成功', result);
+    } catch (error) {
+      console.error('%c[API 测试失败]', 'color: #ff0000; font-weight: bold; font-size: 14px', error);
     }
   },
 

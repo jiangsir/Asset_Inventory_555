@@ -21,6 +21,9 @@ function doGet(e) {
       case 'getRecentAssets':
         result = handleGetRecentAssets(e.parameter.limit);
         break;
+      case 'test':
+        result = {success: true, message: '測試成功', timestamp: new Date().toISOString()};
+        break;
       default:
         result = {success: false, error: '未知的操作'};
     }
