@@ -19,7 +19,7 @@ const app = {
   /**
    * 初始化應用
    */
-  init: function() {
+  init: async function() {
     console.log('初始化財產盤點系統 555');
 
     // 載入設置
@@ -28,8 +28,14 @@ const app = {
     // 初始化 API 客戶端必須優先（ui.init 會使用）
     sheetApi.init(this.config.gasUrl);
 
+    // 初始化 dataManager（必須等待 Promise 完成）
+    try {
+      await dataManager.init();
+    } catch (error) {
+      console.error('數據管理器初始化失敗:', error);
+    }
+
     // 初始化其他模塊
-    dataManager.init();
     ui.init();
     scanner.init();
     camera.init();

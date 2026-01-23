@@ -100,8 +100,8 @@ self.addEventListener('fetch', (event) => {
           cached ||
           fetch(request)
             .then((response) => {
-              // 如果是成功的響應，更新快取
-              if (response && response.status === 200) {
+              // 如果是成功的響應，更新快取（僅支援 http 和 https）
+              if (response && response.status === 200 && request.url.startsWith('http')) {
                 const responseToCache = response.clone();
                 caches.open(CACHE_NAME).then((cache) => {
                   cache.put(request, responseToCache);
@@ -112,7 +112,7 @@ self.addEventListener('fetch', (event) => {
             .catch(() => {
               // 返回離線回退
               return new Response(
-                '無法加載資源。請檢查網絡連接。',
+                'Unable to load resource. Please check your network connection.',
                 { status: 503 }
               );
             })
