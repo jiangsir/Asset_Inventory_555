@@ -133,11 +133,14 @@ const app = {
    */
   queryAsset: async function(code) {
     ui.showLoading('正在查詢財產...');
-    console.log('%c[🔎查詢財產]', 'color: #ff6600; font-weight: bold; font-size: 12px', `正在查詢編號: "${code}"`);
+    console.log('%c━━ 【查詢財產】━━', 'color: #ff6600; font-weight: bold; font-size: 13px; background: #fff5e6; padding: 5px;');
+    console.log('%c查詢編號:', 'color: #ff6600; font-weight: bold', `"${code}"`);
 
     try {
       const asset = await sheetApi.getAsset(code);
-      console.log('%c[🔎查詢結果詳情]', 'color: #00aa00; font-weight: bold; font-size: 12px', asset);
+      console.log('%c查詢結果:', 'color: #ff6600; font-weight: bold', asset.success ? '找到' : '未找到');
+      console.log('%c完整結果對象:', 'color: #ff6600; font-weight: bold', asset);
+      console.log('%c━━━━━━━━━━━━', 'color: #ff6600; font-weight: bold; font-size: 13px; background: #fff5e6; padding: 5px;');
 
       if (asset.success) {
         // 保存到最近查詢歷史
@@ -160,10 +163,13 @@ const app = {
    * 顯示搜索建議
    */
   showSearchSuggestions: async function(query) {
-    console.log('%c[🔍搜索建議]', 'color: #ff6600; font-weight: bold; font-size: 12px', `搜索關鍵詞: "${query}"`);
+    console.log('%c━━ 【搜索建議】━━', 'color: #ff6600; font-weight: bold; font-size: 13px; background: #fff5e6; padding: 5px;');
+    console.log('%c搜索關鍵詞:', 'color: #ff6600; font-weight: bold', `"${query}"`);
     try {
       const results = await sheetApi.searchAssets(query);
-      console.log('%c[🔍搜索結果詳情]', 'color: #00aa00; font-weight: bold; font-size: 12px', `找到 ${results.results?.length || 0} 個結果`, results);
+      console.log('%c搜索結果:', 'color: #ff6600; font-weight: bold', `找到 ${results.results?.length || 0} 個結果`);
+      console.log('%c完整結果對象:', 'color: #ff6600; font-weight: bold', results);
+      console.log('%c━━━━━━━━━━━━', 'color: #ff6600; font-weight: bold; font-size: 13px; background: #fff5e6; padding: 5px;');
 
       if (results.success && results.results.length > 0) {
         const suggestionsDiv = document.getElementById('searchSuggestions');
