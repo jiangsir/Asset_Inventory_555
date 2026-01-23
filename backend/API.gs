@@ -78,16 +78,14 @@ function handleGetAsset(assetCode) {
   }
   
   try {
-    const sheetName = SheetManager.getSheetName();
-    
-    const asset = SheetManager.getAssetByCode(assetCode);
-    if (asset) {
+  const assetResult = SheetManager.getAssetByCode(assetCode);
+    if (assetResult.asset) {
       return sendResponse({
         success: true,
-        asset: asset,
+        asset: assetResult.asset,
         debug: {
           action: 'getAsset',
-          sheetName: sheetName,
+          sheetName: assetResult.sheetName,
           code: assetCode,
           found: true,
           timestamp: new Date().toISOString()
@@ -99,7 +97,7 @@ function handleGetAsset(assetCode) {
         error: '未找到該編號的財產',
         debug: {
           action: 'getAsset',
-          sheetName: sheetName,
+          sheetName: assetResult.sheetName,
           code: assetCode,
           found: false,
           timestamp: new Date().toISOString()
@@ -120,15 +118,14 @@ function handleSearchAssets(query) {
   }
   
   try {
-    const sheetName = SheetManager.getSheetName();
-    
-    const results = SheetManager.searchAssets(query, 10);
+  const searchResult = SheetManager.searchAssets(query, 10);
+    const results = searchResult.results || [];
     return sendResponse({
       success: true,
       results: results,
       debug: {
         action: 'searchAssets',
-        sheetName: sheetName,
+        sheetName: searchResult.sheetName,
         query: query,
         resultCount: results.length,
         timestamp: new Date().toISOString()

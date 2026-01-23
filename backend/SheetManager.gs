@@ -56,6 +56,32 @@ const SheetManager = {
     return sheet ? sheet.getName() : '未知';
   },
 
+  getSheetsInOrder: function() {
+    const ss = this.getSpreadsheet();
+    if (!ss) return [];
+
+    const sheets = [];
+    for (const name of this.TARGET_SHEET_NAMES) {
+      const sheet = ss.getSheetByName(name);
+      if (sheet) {
+        sheets.push(sheet);
+      }
+    }
+
+    if (!sheets.length) {
+      const fallback = ss.getActiveSheet();
+      if (fallback) sheets.push(fallback);
+    }
+
+    return sheets;
+  },
+
+  getSheetData: function(sheet) {
+    if (!sheet) return null;
+    const range = sheet.getDataRange();
+    return range.getValues();
+  },
+
   /**
    * 獲取所有數據（包含標題）
    */
@@ -72,34 +98,40 @@ const SheetManager = {
    */
   getAssetByCode: function(code) {
     code = String(code).trim();
-    const sheet = this.getSheet();
-    const sheetName = sheet ? sheet.getName() : '未知';
-    
-    Logger.log(`[getAssetByCode] Sheet名稱: ${sheetName}`);
-    Logger.log(`[getAssetByCode] 查詢編號: ${code}`);
-    Logger.log(`[getAssetByCode] 搜索欄位: B (財產編號)`);
-    
-    const data = this.getAllData();
-    
-    if (!data || data.length < 2) {
-      Logger.log(`[getAssetByCode] 數據為空或不足2行，返回null`);
-      return null;
-    }
-    
-    Logger.log(`[getAssetByCode] 數據總行數: ${data.length}`);
-    
-    // 從第2行開始查找（第1行是標題）
-    for (let i = 1; i < data.length; i++) {
-      const cellValue = String(data[i][this.COLUMNS.B.index]).trim();
-      Logger.log(`[getAssetByCode] 第 ${i+1} 行比較: "${cellValue}" === "${code}" ?`);
-      if (cellValue === code) {
-        Logger.log(`[getAssetByCode] 找到匹配於第 ${i+1} 行`);
-        return this.formatAssetData(data[i], i);
+    const sheets = this.getSheetsInOrder();
+    let lastSheetName = '未知';
+
+    for (const sheet of sheets) {
+      const sheetName = sheet.getName();
+      lastSheetName = sheetName;
+
+      Logger.log(`[getAssetByCode] Sheet名稱: ${sheetName}`);
+      Logger.log(`[getAssetByCode] 查詢編號: ${code}`);
+      Logger.log(`[getAssetByCode] 搜索欄位: B (財產編號)`);
+
+      const data = this.getSheetData(sheet);
+      if (!data || data.length < 2) {
+        Logger.log(`[getAssetByCode] Sheet ${sheetName} 數據為空或不足2行，跳過`);
+        continue;
+      }
+
+      Logger.log(`[getAssetByCode] Sheet ${sheetName} 數據總行數: ${data.length}`);
+
+      for (let i = 1; i < data.length; i++) {
+        const cellValue = String(data[i][this.COLUMNS.B.index]).trim();
+        Logger.log(`[getAssetByCode] 第 ${i+1} 行比較: "${cellValue}" === "${code}" ?`);
+        if (cellValue === code) {
+          Logger.log(`[getAssetByCode] 在 ${sheetName} 找到匹配於第 ${i+1} 行`);
+          return {
+            asset: this.formatAssetData(data[i], i),
+            sheetName: sheetName
+          };
+        }
       }
     }
-    
-    Logger.log(`[getAssetByCode] 未找到匹配的編號`);
-    return null;
+
+    Logger.log(`[getAssetByCode] 未在任何目標工作表找到匹配的編號`);
+    return { asset: null, sheetName: lastSheetName };
   },
 
   /**
@@ -107,36 +139,44 @@ const SheetManager = {
    */
   searchAssets: function(query, limit = 10) {
     query = String(query).toLowerCase().trim();
-    const sheet = this.getSheet();
-    const sheetName = sheet ? sheet.getName() : '未知';
-    
-    Logger.log(`[searchAssets] Sheet名稱: ${sheetName}`);
+    const sheets = this.getSheetsInOrder();
+    let lastSheetName = '未知';
+
     Logger.log(`[searchAssets] 搜索關鍵詞: ${query}`);
     Logger.log(`[searchAssets] 搜索欄位: B (財產編號) 和 C (財產名稱)`);
-    
-    const data = this.getAllData();
-    
-    if (!data || data.length < 2) {
-      Logger.log(`[searchAssets] 數據為空或不足2行，返回空陣列`);
-      return [];
-    }
-    
-    Logger.log(`[searchAssets] 數據總行數: ${data.length}`);
-    
-    const results = [];
-    
-    for (let i = 1; i < data.length && results.length < limit; i++) {
-      const code = String(data[i][this.COLUMNS.B.index]).toLowerCase();
-      const name = String(data[i][this.COLUMNS.C.index]).toLowerCase();
-      
-      if (code.includes(query) || name.includes(query)) {
-        Logger.log(`[searchAssets] 第 ${i+1} 行匹配 - 編號: ${code}, 名稱: ${name}`);
-        results.push(this.formatAssetData(data[i], i));
+
+    for (const sheet of sheets) {
+      const sheetName = sheet.getName();
+      lastSheetName = sheetName;
+      Logger.log(`[searchAssets] 嘗試在 ${sheetName} 搜索`);
+
+      const data = this.getSheetData(sheet);
+      if (!data || data.length < 2) {
+        Logger.log(`[searchAssets] Sheet ${sheetName} 數據為空或不足2行，跳過`);
+        continue;
+      }
+
+      Logger.log(`[searchAssets] Sheet ${sheetName} 數據總行數: ${data.length}`);
+      const results = [];
+
+      for (let i = 1; i < data.length && results.length < limit; i++) {
+        const code = String(data[i][this.COLUMNS.B.index]).toLowerCase();
+        const name = String(data[i][this.COLUMNS.C.index]).toLowerCase();
+
+        if (code.includes(query) || name.includes(query)) {
+          Logger.log(`[searchAssets] Sheet ${sheetName} 第 ${i+1} 行匹配 - 編號: ${code}, 名稱: ${name}`);
+          results.push(this.formatAssetData(data[i], i));
+        }
+      }
+
+      if (results.length > 0) {
+        Logger.log(`[searchAssets] 在 ${sheetName} 找到 ${results.length} 個結果`);
+        return { results, sheetName };
       }
     }
-    
-    Logger.log(`[searchAssets] 找到 ${results.length} 個結果`);
-    return results;
+
+    Logger.log(`[searchAssets] 未在任何目標工作表找到結果`);
+    return { results: [], sheetName: lastSheetName };
   },
 
   /**
@@ -214,9 +254,9 @@ const SheetManager = {
    */
   updateAsset: function(updateData) {
     try {
-      const existingAsset = this.getAssetByCode(updateData.code);
+      const existingAssetResult = this.getAssetByCode(updateData.code);
       
-      if (!existingAsset) {
+      if (!existingAssetResult.asset) {
         return {
           success: false,
           error: '未找到該財產編號'
@@ -224,7 +264,7 @@ const SheetManager = {
       }
       
       const sheet = this.getSheet();
-      const rowIndex = existingAsset.rowIndex;
+      const rowIndex = existingAssetResult.asset.rowIndex;
       
       // 準備更新的行數據
       const allData = this.getAllData();
@@ -242,11 +282,11 @@ const SheetManager = {
       range.setValues([row]);
       
       // 返回更新後的資產
-      const updatedAsset = this.getAssetByCode(updateData.code);
+      const updatedAssetResult = this.getAssetByCode(updateData.code);
       
       return {
         success: true,
-        asset: updatedAsset
+        asset: updatedAssetResult.asset
       };
       
     } catch(error) {
@@ -264,10 +304,10 @@ const SheetManager = {
    */
   migrateOldData: function(oldCode, newCode, fieldsToMigrate = ['location', 'remark', 'scrappable', 'photos']) {
     try {
-      const oldAsset = this.getAssetByCode(oldCode);
-      const newAsset = this.getAssetByCode(newCode);
+      const oldAssetResult = this.getAssetByCode(oldCode);
+      const newAssetResult = this.getAssetByCode(newCode);
       
-      if (!oldAsset || !newAsset) {
+      if (!oldAssetResult.asset || !newAssetResult.asset) {
         return {
           success: false,
           error: '舊或新編號不存在'
@@ -281,16 +321,16 @@ const SheetManager = {
       
       // 只遷移指定字段
       if (fieldsToMigrate.includes('location')) {
-        migratedData.location = oldAsset.location;
+        migratedData.location = oldAssetResult.asset.location;
       }
       if (fieldsToMigrate.includes('remark')) {
-        migratedData.remark = oldAsset.remark;
+        migratedData.remark = oldAssetResult.asset.remark;
       }
       if (fieldsToMigrate.includes('scrappable')) {
-        migratedData.scrappable = oldAsset.scrappable;
+        migratedData.scrappable = oldAssetResult.asset.scrappable;
       }
       if (fieldsToMigrate.includes('photos')) {
-        migratedData.photos = oldAsset.photos;
+        migratedData.photos = oldAssetResult.asset.photos;
       }
       
       // 執行更新
