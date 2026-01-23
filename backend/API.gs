@@ -78,8 +78,7 @@ function handleGetAsset(assetCode) {
   }
   
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('財產列表');
-    const sheetName = sheet ? sheet.getName() : '未知';
+    const sheetName = SheetManager.getSheetName();
     
     const asset = SheetManager.getAssetByCode(assetCode);
     if (asset) {
@@ -121,8 +120,7 @@ function handleSearchAssets(query) {
   }
   
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('財產列表');
-    const sheetName = sheet ? sheet.getName() : '未知';
+    const sheetName = SheetManager.getSheetName();
     
     const results = SheetManager.searchAssets(query, 10);
     return sendResponse({

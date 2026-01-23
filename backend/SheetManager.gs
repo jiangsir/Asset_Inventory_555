@@ -4,6 +4,8 @@
  */
 
 const SheetManager = {
+  SPREADSHEET_ID: '1DT_hQlOCNr7WN8gLysO3Y9WFB8hYYroeHWMRxTzprDs',
+  TARGET_SHEET_NAME: '財產列表',
   
   // 列映射配置
   COLUMNS: {
@@ -26,9 +28,24 @@ const SheetManager = {
   /**
    * 獲取活躍 Spreadsheet
    */
+  getSpreadsheet: function() {
+    try {
+      return SpreadsheetApp.openById(this.SPREADSHEET_ID);
+    } catch (e) {
+      Logger.log('開啟 Spreadsheet 失敗: ' + e);
+      return null;
+    }
+  },
+
   getSheet: function() {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    return ss.getSheetByName('財產列表') || ss.getActiveSheet();
+    const ss = this.getSpreadsheet();
+    if (!ss) return null;
+    return ss.getSheetByName(this.TARGET_SHEET_NAME) || ss.getActiveSheet();
+  },
+
+  getSheetName: function() {
+    const sheet = this.getSheet();
+    return sheet ? sheet.getName() : '未知';
   },
 
   /**
