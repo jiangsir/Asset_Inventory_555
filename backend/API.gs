@@ -10,19 +10,24 @@ function doGet(e) {
   const action = e.parameter.action;
   
   try {
+    let result = {};
     switch(action) {
       case 'getAsset':
-        return handleGetAsset(e.parameter.code);
+        result = handleGetAsset(e.parameter.code);
+        break;
       case 'searchAssets':
-        return handleSearchAssets(e.parameter.query);
+        result = handleSearchAssets(e.parameter.query);
+        break;
       case 'getRecentAssets':
-        return handleGetRecentAssets(e.parameter.limit);
+        result = handleGetRecentAssets(e.parameter.limit);
+        break;
       default:
-        return sendResponse({success: false, error: '未知的操作'}, 400);
+        result = {success: false, error: '未知的操作'};
     }
+    return createCorsResponse(result);
   } catch(error) {
     Logger.log('GET 錯誤: ' + error);
-    return sendResponse({success: false, error: error.toString()}, 500);
+    return createCorsResponse({success: false, error: error.toString()});
   }
 }
 
@@ -36,19 +41,24 @@ function doPost(e) {
       data = JSON.parse(e.postData.contents);
     }
     
+    let result = {};
     switch(action) {
       case 'updateAsset':
-        return handleUpdateAsset(data);
+        result = handleUpdateAsset(data);
+        break;
       case 'uploadPhoto':
-        return handleUploadPhoto(data);
+        result = handleUploadPhoto(data);
+        break;
       case 'deletePhoto':
-        return handleDeletePhoto(data);
+        result = handleDeletePhoto(data);
+        break;
       default:
-        return sendResponse({success: false, error: '未知的操作'}, 400);
+        result = {success: false, error: '未知的操作'};
     }
+    return createCorsResponse(result);
   } catch(error) {
     Logger.log('POST 錯誤: ' + error);
-    return sendResponse({success: false, error: error.toString()}, 500);
+    return createCorsResponse({success: false, error: error.toString()});
   }
 }
 
@@ -221,29 +231,29 @@ function handleDeletePhoto(data) {
 // ============================================
 
 /**
- * 發送 JSON 響應（帶 CORS headers）
+ * 創建支持 CORS 的 JSON 響應
  */
-function sendResponse(data, statusCode = 200) {
-  const output = ContentService.createTextOutput(JSON.stringify(data));
-  output.setMimeType(ContentService.MimeType.JSON);
+function createCorsResponse(data) {
+  // 使用 HtmlService 來設置響應頭
+  const html = JSON.stringify(data);
+  const output = HtmlService.createHtmlOutput(html);
+  output.setMimeType(HtmlService.MimeType.JSON);
   
-  // 添加 CORS headers 支持跨域請求
-  output.setHeader('Access-Control-Allow-Origin', '*');
-  output.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  output.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // 嘗試設置 CORS headers（如果支持）
+  try {
+    output.setXFrameOptionMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  } catch(e) {
+    // 如果不支持，忽略
+  }
   
   return output;
 }
 
 /**
- * 處理 OPTIONS preflight 請求（CORS）
+ * 發送 JSON 響應（帶 CORS headers）
  */
-function doOptions(e) {
-  const output = ContentService.createTextOutput('');
-  output.setHeader('Access-Control-Allow-Origin', '*');
-  output.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  output.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  return output;
+function sendResponse(data, statusCode = 200) {
+  return createCorsResponse(data);
 }
 
 /**
