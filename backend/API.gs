@@ -221,11 +221,28 @@ function handleDeletePhoto(data) {
 // ============================================
 
 /**
- * 發送 JSON 響應
+ * 發送 JSON 響應（帶 CORS headers）
  */
 function sendResponse(data, statusCode = 200) {
   const output = ContentService.createTextOutput(JSON.stringify(data));
   output.setMimeType(ContentService.MimeType.JSON);
+  
+  // 添加 CORS headers 支持跨域請求
+  output.addHeader('Access-Control-Allow-Origin', '*');
+  output.addHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  output.addHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  return output;
+}
+
+/**
+ * 處理 OPTIONS preflight 請求（CORS）
+ */
+function doOptions(e) {
+  const output = ContentService.createTextOutput('');
+  output.addHeader('Access-Control-Allow-Origin', '*');
+  output.addHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  output.addHeader('Access-Control-Allow-Headers', 'Content-Type');
   return output;
 }
 
