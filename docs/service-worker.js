@@ -3,7 +3,7 @@
  * 支持離線功能和應用緩存
  */
 
-const CACHE_NAME = 'asset_inventory_v1';
+const CACHE_NAME = 'asset_inventory_v3_debug';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
