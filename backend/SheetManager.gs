@@ -5,7 +5,7 @@
 
 const SheetManager = {
   SPREADSHEET_ID: '1DT_hQlOCNr7WN8gLysO3Y9WFB8hYYroeHWMRxTzprDs',
-  TARGET_SHEET_NAME: '財產列表',
+  TARGET_SHEET_NAMES: ['一般性財產:江其勳', '一般性財產:江其勳-資訊', '非消耗性財產:江其勳', '非消耗性財產:江其勳-資訊'],
   
   // 列映射配置
   COLUMNS: {
@@ -40,7 +40,15 @@ const SheetManager = {
   getSheet: function() {
     const ss = this.getSpreadsheet();
     if (!ss) return null;
-    return ss.getSheetByName(this.TARGET_SHEET_NAME) || ss.getActiveSheet();
+
+    for (const name of this.TARGET_SHEET_NAMES) {
+      const sheet = ss.getSheetByName(name);
+      if (sheet) {
+        return sheet;
+      }
+    }
+
+    return ss.getActiveSheet();
   },
 
   getSheetName: function() {
