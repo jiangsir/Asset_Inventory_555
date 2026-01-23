@@ -86,8 +86,8 @@ self.addEventListener('fetch', (event) => {
             }
             // 返回離線頁面（可選）
             return new Response(
-              '離線模式：無法連接到伺服器。請檢查網絡連接。',
-              { status: 503, statusText: '服務不可用' }
+              'Offline: Unable to connect to server. Please check your network connection.',
+              { status: 503, statusText: 'Service Unavailable' }
             );
           });
         })
