@@ -94,7 +94,7 @@ function handleGetAsset(assetCode) {
     } else {
       return sendResponse({
         success: false,
-        error: '未找到該編號的財產',
+        error: `未找到該編號(${assetCode})的財產`,
         debug: {
           action: 'getAsset',
           sheetName: assetResult.sheetName,
