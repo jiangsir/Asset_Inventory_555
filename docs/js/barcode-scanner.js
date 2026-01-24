@@ -39,10 +39,10 @@ const scanner = {
 
     const input = document.getElementById('assetCodeInput');
     if (input) {
-      input.value = normalized;
+      input.value = code;
     }
 
-    // 查詢財產
+    // 查詢財產，後端需要格式化值
     app.queryAsset(normalized);
   },
 
