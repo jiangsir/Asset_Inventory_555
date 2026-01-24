@@ -49,7 +49,7 @@ const scanner = {
   normalizeBarcode: function(code) {
     const trimmed = String(code).trim();
     if (/^\d{14}$/.test(trimmed)) {
-      return `${trimmed.slice(0, 9)}-${trimmed.slice(9)}`;
+      return `${trimmed.slice(0, 9)} -${trimmed.slice(9)}`;
     }
     return trimmed;
   },
