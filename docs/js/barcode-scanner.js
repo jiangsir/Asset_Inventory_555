@@ -35,13 +35,23 @@ const scanner = {
       return;
     }
 
+    const normalized = this.normalizeBarcode(code);
+
     const input = document.getElementById('assetCodeInput');
     if (input) {
-      input.value = code;
+      input.value = normalized;
     }
 
     // 查詢財產
-    app.queryAsset(code);
+    app.queryAsset(normalized);
+  },
+
+  normalizeBarcode: function(code) {
+    const trimmed = String(code).trim();
+    if (/^\d{14}$/.test(trimmed)) {
+      return `${trimmed.slice(0, 9)}-${trimmed.slice(9)}`;
+    }
+    return trimmed;
   },
 
   /**
