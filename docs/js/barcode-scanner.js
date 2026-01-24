@@ -35,26 +35,12 @@ const scanner = {
       return;
     }
 
-    const normalized = this.normalizeBarcode(code);
-
     const input = document.getElementById('assetCodeInput');
     if (input) {
       input.value = code;
     }
 
-    // 查詢財產，後端需要格式化值
-    app.queryAsset(normalized);
-  },
-
-  normalizeBarcode: function(code) {
-    const trimmed = String(code).trim();
-    const digitsOnly = trimmed.replace(/\D+/g, '');
-
-    if (digitsOnly.length === 14) {
-      return `${digitsOnly.slice(0, 9)} -${digitsOnly.slice(9)}`;
-    }
-
-    return trimmed;
+    app.queryAsset(code);
   },
 
   /**

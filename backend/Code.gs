@@ -61,7 +61,8 @@ function processExpansionInPlace() {
   for (let i = 1; i < data.length; i++) {
     let row = data[i];
     let qty = row[COL_QTY];
-    let assetId = String(row[COL_ID]); 
+    let rawId = String(row[COL_ID] || '');
+    let assetId = rawId.replace(/[\s-]+/g, '');
 
     if (qty > 1 && assetId) {
       let match = assetId.match(/^(.*?)(\d+)$/);
@@ -88,6 +89,7 @@ function processExpansionInPlace() {
         // 無法解析數字，僅拆分
         for (let j = 0; j < qty; j++) {
            let newRow = [...row];
+           newRow[COL_ID] = assetId;
            newRow[COL_QTY] = 1;
            newRow[COL_TOTAL_PRICE] = newRow[COL_UNIT_PRICE];
            let originalLoc = newRow[COL_LOCATION] || "";
@@ -96,7 +98,9 @@ function processExpansionInPlace() {
         }
       }
     } else {
-      newData.push(row);
+      let sanitizedRow = [...row];
+      sanitizedRow[COL_ID] = assetId;
+      newData.push(sanitizedRow);
     }
   }
 

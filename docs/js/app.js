@@ -131,25 +131,13 @@ const app = {
   /**
    * 查詢財產
    */
-  formatCodeForBackend: function(code) {
-    const trimmed = String(code || '').trim();
-    const digitsOnly = trimmed.replace(/\D+/g, '');
-
-    if (digitsOnly.length === 14) {
-      return `${digitsOnly.slice(0, 9)} -${digitsOnly.slice(9)}`;
-    }
-
-    return trimmed;
-  },
-
   queryAsset: async function(code) {
-    const backendCode = this.formatCodeForBackend(code);
     ui.showLoading('正在查詢財產...');
     console.log('%c━━ 【查詢財產】━━', 'color: #ff6600; font-weight: bold; font-size: 13px; background: #fff5e6; padding: 5px;');
-    console.log('%c查詢編號:', 'color: #ff6600; font-weight: bold', `輸入="${code}", 傳給後端="${backendCode}"`);
+    console.log('%c查詢編號:', 'color: #ff6600; font-weight: bold', `"${code}"`);
 
     try {
-      const asset = await sheetApi.getAsset(backendCode);
+      const asset = await sheetApi.getAsset(code);
       console.log('%c查詢結果:', 'color: #ff6600; font-weight: bold', asset.success ? '找到' : '未找到');
       console.log('%c完整結果對象:', 'color: #ff6600; font-weight: bold', asset);
       console.log('%c━━━━━━━━━━━━', 'color: #ff6600; font-weight: bold; font-size: 13px; background: #fff5e6; padding: 5px;');
