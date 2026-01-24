@@ -35,6 +35,11 @@ const scanner = {
       return;
     }
 
+    const input = document.getElementById('assetCodeInput');
+    if (input) {
+      input.value = code;
+    }
+
     // 查詢財產
     app.queryAsset(code);
   },
@@ -57,12 +62,44 @@ const camera = {
 
   currentStream: null,
   capturedPhoto: null,
+  barcodeDetector: null,
+  scannerFrameId: null,
+  detectorCanvas: null,
 
   /**
    * 初始化相機
    */
   init: function() {
     console.log('相機模塊初始化');
+    this.setupBarcodeDetector();
+  },
+
+  setupBarcodeDetector: function() {
+    if (!('BarcodeDetector' in window)) {
+      console.warn('當前瀏覽器不支援 BarcodeDetector；請使用支援的瀏覽器或設備');
+      this.barcodeDetector = null;
+      return;
+    }
+
+    try {
+      this.barcodeDetector = new BarcodeDetector({
+        formats: [
+          'ean_13',
+          'ean_8',
+          'upc_a',
+          'upc_e',
+          'code_128',
+          'code_39',
+          'code_93',
+          'codabar',
+          'itf',
+          'qr_code'
+        ]
+      });
+    } catch (error) {
+      console.warn('BarcodeDetector 初始化失敗，暫時無法使用掃描功能', error);
+      this.barcodeDetector = null;
+    }
   },
 
   /**
@@ -92,6 +129,10 @@ const camera = {
       video.srcObject = stream;
       video.play();
 
+      video.addEventListener('loadedmetadata', () => {
+        this.startBarcodeDetection(video);
+      });
+
     } catch (error) {
       console.error('相機訪問失敗:', error);
 
@@ -113,6 +154,8 @@ const camera = {
       this.currentStream.getTracks().forEach(track => track.stop());
       this.currentStream = null;
     }
+
+    this.stopBarcodeDetection();
 
     const modal = document.getElementById('cameraModal');
     modal.style.display = 'none';
@@ -148,6 +191,53 @@ const camera = {
     } catch (error) {
       console.error('拍照失敗:', error);
       ui.showNotification('error', '拍照失敗', error.message);
+    }
+  },
+
+  startBarcodeDetection: function(video) {
+    if (!this.barcodeDetector || !video) return;
+    this.stopBarcodeDetection();
+
+    if (!this.detectorCanvas) {
+      this.detectorCanvas = document.createElement('canvas');
+    }
+
+    const canvas = this.detectorCanvas;
+    const ctx = canvas.getContext('2d');
+
+    const detectFrame = async () => {
+      if (!video || video.readyState !== 4) {
+        this.scannerFrameId = requestAnimationFrame(detectFrame);
+        return;
+      }
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      try {
+        const barcodes = await this.barcodeDetector.detect(canvas);
+        if (barcodes.length) {
+          const code = barcodes[0].rawValue;
+          this.stopBarcodeDetection();
+          this.closeCamera();
+          scanner.processBarcode(code);
+          return;
+        }
+      } catch (error) {
+        console.error('條碼偵測失敗:', error);
+      }
+
+      this.scannerFrameId = requestAnimationFrame(detectFrame);
+    };
+
+    this.scannerFrameId = requestAnimationFrame(detectFrame);
+  },
+
+  stopBarcodeDetection: function() {
+    if (this.scannerFrameId) {
+      cancelAnimationFrame(this.scannerFrameId);
+      this.scannerFrameId = null;
     }
   },
 
