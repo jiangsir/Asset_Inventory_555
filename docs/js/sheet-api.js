@@ -47,13 +47,14 @@ const sheetApi = {
         method: method
       };
 
-      // 只在 POST 時添加 Content-Type header，避免 CORS preflight
+      // POST: 使用 application/x-www-form-urlencoded 傳送 single "payload" 欄位，這是 "simple request"（不會觸發 preflight）。
+      // 服務端（Apps Script）會支援解析此 payload。
       if (method === 'POST') {
         options.headers = {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
         };
         if (data) {
-          options.body = JSON.stringify(data);
+          options.body = new URLSearchParams({ payload: JSON.stringify(data) }).toString();
         }
       }
 

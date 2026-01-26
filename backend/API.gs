@@ -39,9 +39,25 @@ function doPost(e) {
   let data = {};
   
   try {
-    // 嘗試解析 JSON 請求體
-    if (e.postData && e.postData.contents) {
-      data = JSON.parse(e.postData.contents);
+    // 嘗試解析請求體：
+    // - 若前端以 application/x-www-form-urlencoded 傳入，Apps Script 會把欄位放到 e.parameter
+    // - 若前端直接傳送 raw JSON，則解析 e.postData.contents
+    if (e.parameter && e.parameter.payload) {
+      try {
+        data = JSON.parse(e.parameter.payload);
+        Logger.log('doPost: parsed payload from e.parameter.payload');
+      } catch (err) {
+        data = {};
+        Logger.log('doPost: failed to parse e.parameter.payload');
+      }
+    } else if (e.postData && e.postData.contents) {
+      try {
+        data = JSON.parse(e.postData.contents);
+        Logger.log('doPost: parsed JSON from e.postData.contents (type=' + (e.postData.type || 'unknown') + ')');
+      } catch (err) {
+        data = {};
+        Logger.log('doPost: failed to parse e.postData.contents (type=' + (e.postData.type || 'unknown') + ')');
+      }
     }
     
     let result = {};
@@ -65,6 +81,9 @@ function doPost(e) {
   }
 }
 
+/**
+ * 處理 CORS 預檢請求
+ */
 // ============================================
 // GET 請求處理
 // ============================================
