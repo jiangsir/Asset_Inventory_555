@@ -310,24 +310,34 @@ function handleFinishUpload(data) {
     const code = String(data.code);
     const photoName = data.photoName || null;
 
+    Logger.log('[handleFinishUpload] uploadId=' + uploadId + ', code=' + code + ', photoName=' + photoName);
+
     const assembled = DriveManager.assembleUploadParts(uploadId);
     if (!assembled || !assembled.success) {
+      Logger.log('[handleFinishUpload] assemble failed: ' + (assembled && assembled.error));
       return sendResponse({ success: false, error: assembled && assembled.error ? assembled.error : '組合失敗' }, 500);
     }
 
-    const base64 = assembled.data;
+    const base64 = assembled.data || '';
+    Logger.log('[handleFinishUpload] assembled length=' + (base64 ? base64.length : 0));
+
+    if (!base64 || base64.length < 10) {
+      return sendResponse({ success: false, error: 'assembled data is empty or too small' }, 400);
+    }
+
     const result = DriveManager.uploadPhoto(code, base64, photoName);
 
     // 清理零散檔案
-    DriveManager.cleanupUploadParts(uploadId);
+    try { DriveManager.cleanupUploadParts(uploadId); } catch(e){ Logger.log('[handleFinishUpload] cleanup failed: ' + e); }
 
     if (result.success) {
       return sendResponse({ success: true, photo: result.photo });
     }
 
+    Logger.log('[handleFinishUpload] uploadPhoto returned error: ' + result.error);
     return sendResponse({ success: false, error: result.error || '上傳失敗' }, 500);
   } catch (err) {
-    Logger.log('[handleFinishUpload] ' + err);
+    Logger.log('[handleFinishUpload] exception: ' + err);
     return sendResponse({ success: false, error: err.toString() }, 500);
   }
 }

@@ -66,9 +66,20 @@ const DriveManager = {
         };
       }
 
-      // 解碼 Base64 數據
-      const binaryString = Utilities.base64Decode(photoBase64);
-      const blob = Utilities.newBlob(binaryString, 'image/jpeg');
+      // 驗證並解碼 Base64 數據（加強日誌與錯誤處理）
+      if (!photoBase64 || String(photoBase64).length === 0) {
+        return { success: false, error: 'empty photoBase64' };
+      }
+
+      Logger.log('[DriveManager.uploadPhoto] incoming — code=' + assetCode + ', photoBase64 length=' + String(photoBase64).length + ', photoName=' + (photoName || 'null'));
+
+      let binaryString;
+      try {
+        binaryString = Utilities.base64Decode(photoBase64);
+      } catch (err) {
+        Logger.log('[DriveManager.uploadPhoto] base64Decode failed: ' + err);
+        return { success: false, error: 'base64 decode failed: ' + err.toString() };
+      }
 
       // 生成照片名稱
       if (!photoName) {
@@ -76,13 +87,20 @@ const DriveManager = {
         photoName = `photo_${timestamp}.jpg`;
       }
 
+      // 建立 Blob 時明確帶上 name（避免某些 API 對空 name 的限制）
+      const blob = Utilities.newBlob(binaryString, 'image/jpeg', photoName || ('photo_' + new Date().getTime() + '.jpg'));
+
       // 獲取資產文件夾並上傳
       const assetFolder = this.getAssetFolder(assetCode);
-      const file = assetFolder.createFile(blob);
-      file.setName(photoName);
-
-      // 設置照片為可共享（便於查看）
-      // 可選：添加共享設置，這裡暫不設定
+      let file;
+      try {
+        file = assetFolder.createFile(blob);
+        // setName 仍然保留以確保命名一致
+        file.setName(photoName);
+      } catch (err) {
+        Logger.log('[DriveManager.uploadPhoto] createFile failed: ' + err);
+        return { success: false, error: err.toString() };
+      }
 
       // 生成照片信息對象
       const photoInfo = {

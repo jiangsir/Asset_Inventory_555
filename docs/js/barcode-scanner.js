@@ -181,11 +181,16 @@ const camera = {
       ctx.drawImage(video, 0, 0);
 
       // 轉換為 Base64
-      const photoBase64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      const photoBase64 = dataUrl.split(',')[1];
       this.capturedPhoto = photoBase64;
+      // mirror to camera module and global for robustness
+      try { if (window.camera) window.camera.capturedPhoto = photoBase64; } catch(e){}
+      window.__lastCapturedPhoto = photoBase64;
+      console.log('[takePhoto] capturedPhoto length=', photoBase64.length);
 
       // 顯示預覽
-      this.showPhotoPreview(canvas.toDataURL('image/jpeg', 0.8));
+      this.showPhotoPreview(dataUrl);
 
     } catch (error) {
       console.error('拍照失敗:', error);
@@ -241,29 +246,88 @@ const camera = {
   },
 
   /**
-   * 顯示照片預覽
+   * 顯示照片預覽（若是 data:URI，會嘗試抽出 base64 並保存到 capturedPhoto）
    */
   showPhotoPreview: function(photoDataUrl) {
     const modal = document.getElementById('photoModal');
     const preview = document.getElementById('photoPreview');
+    const confirmBtn = document.getElementById('photoConfirmBtn');
+
+    // 嘗試從 data:URI 提取 base64 並保存到 this.capturedPhoto（若尚未設定）
+    try {
+      if ((!this.capturedPhoto || this.capturedPhoto.length === 0) && typeof photoDataUrl === 'string' && photoDataUrl.indexOf('data:') === 0) {
+        const parts = photoDataUrl.split(',');
+        if (parts.length > 1) {
+          this.capturedPhoto = parts[1];
+          console.log('[showPhotoPreview] extracted base64 into capturedPhoto, len=', this.capturedPhoto.length);
+        }
+      }
+    } catch (e) {
+      console.warn('[showPhotoPreview] failed to extract base64 from data URI', e);
+    }
+
+    // 先禁用確認按鈕，等圖片真正載入後啟用
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.setAttribute('aria-disabled', 'true');
+    }
+
+    preview.onload = () => {
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.removeAttribute('aria-disabled');
+      }
+    };
+    preview.onerror = () => {
+      if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.setAttribute('aria-disabled', 'true');
+      }
+    };
 
     preview.src = photoDataUrl;
     modal.style.display = 'flex';
   },
 
+
   /**
    * 確認照片
    */
   confirmPhoto: async function() {
+    // 如果 this.capturedPhoto 缺失，嘗試多處補救來源（camera 模組、preview 元素、ui.currentAsset.photos）
+    if (!this.capturedPhoto) {
+      console.log('[confirmPhoto] capturedPhoto missing — attempting fallbacks');
+      // 1) camera module
+      if (window.camera && window.camera.capturedPhoto) {
+        this.capturedPhoto = window.camera.capturedPhoto;
+        console.log('[confirmPhoto] recovered from window.camera.capturedPhoto, len=', this.capturedPhoto.length);
+      }
+
+      // 2) ui.currentAsset.photos
+      if ((!this.capturedPhoto || this.capturedPhoto.length === 0) && ui && ui.currentAsset && ui.currentAsset.photos && ui.currentAsset.photos[0]) {
+        this.capturedPhoto = ui.currentAsset.photos[0];
+        console.log('[confirmPhoto] recovered from ui.currentAsset.photos[0], len=', this.capturedPhoto.length);
+      }
+
+      // 3) preview <img> (data: URI)
+      if ((!this.capturedPhoto || this.capturedPhoto.length === 0)) {
+        const preview = document.getElementById('photoPreview');
+        if (preview && preview.src && typeof preview.src === 'string' && preview.src.indexOf('data:') === 0) {
+          const parts = preview.src.split(',');
+          if (parts.length > 1) {
+            this.capturedPhoto = parts[1];
+            console.log('[confirmPhoto] recovered from preview.src data URI, len=', this.capturedPhoto.length);
+          }
+        }
+      }
+    }
+
     if (!this.capturedPhoto || !ui.currentAsset) {
-      ui.showNotification('error', '錯誤', '缺少必需信息');
+      ui.showNotification('error', '錯誤', '缺少必需信息（請重新拍照或選擇照片）');
       return;
     }
 
-    // 關閉預覽
-    this.closePhotoPreview();
-
-    // 關閉相機
+    // 關閉相機（保留預覽直到上傳結束）
     this.closeCamera();
 
     // 上傳照片
@@ -361,9 +425,12 @@ const camera = {
 
       reader.onload = async (event) => {
         const result = event.target.result;
-        const photoBase64 = result.split(',')[1];
-
+        const parts = result.split(',');
+        const photoBase64 = parts.length > 1 ? parts[1] : '';
         this.capturedPhoto = photoBase64;
+        try { if (window.camera) window.camera.capturedPhoto = photoBase64; } catch(e){}
+        window.__lastCapturedPhoto = photoBase64;
+        console.log('[selectFromGallery] capturedPhoto length=', photoBase64.length);
         this.showPhotoPreview(result);
       };
 
