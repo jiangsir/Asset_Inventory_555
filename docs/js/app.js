@@ -228,7 +228,7 @@ const app = {
   /**
    * 上傳照片
    */
-  uploadPhoto: async function(photoBase64, fileName = null) {
+  uploadPhoto: async function(photoBase64, fileName = null, onProgress = null) {
     ui.showLoading('正在上傳照片...');
 
     try {
@@ -236,7 +236,7 @@ const app = {
         code: ui.currentAsset.code,
         photoBase64: photoBase64,
         photoName: fileName
-      });
+      }, onProgress);
 
       if (result.success) {
         ui.showNotification('success', '上傳成功', '照片已保存');
@@ -253,6 +253,7 @@ const app = {
       ui.hideLoading();
     }
   },
+
 
   /**
    * 同步數據

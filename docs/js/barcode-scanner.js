@@ -270,12 +270,12 @@ const camera = {
     ui.showLoading('正在上傳照片...');
 
     try {
-      const result = await sheetApi.uploadPhoto({
-        code: ui.currentAsset.code,
-        photoBase64: this.capturedPhoto
+      // 使用 app.uploadPhoto（支援 progress callback 與分片上傳）
+      const result = await app.uploadPhoto(this.capturedPhoto, 'photo.jpg', (percent, idx, total) => {
+        console.log(`upload progress: ${percent}% (${idx+1}/${total})`);
       });
 
-      if (result.success) {
+      if (result && result.success) {
         // 添加到當前資產的照片列表
         if (!ui.currentAsset.photos) {
           ui.currentAsset.photos = [];
@@ -287,7 +287,7 @@ const camera = {
         ui.displayPhotos(ui.currentAsset.photos);
         ui.showNotification('success', '上傳成功', '照片已保存');
       } else {
-        ui.showNotification('error', '上傳失敗', result.error);
+        ui.showNotification('error', '上傳失敗', (result && result.error) || '未知錯誤');
       }
     } catch (error) {
       console.error('上傳錯誤:', error);

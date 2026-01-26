@@ -109,6 +109,81 @@ const DriveManager = {
     }
   },
 
+  /** TEMP UPLOAD (chunk) helpers **/
+  getTempFolder: function() {
+    try {
+      const root = this.getRootFolder();
+      const name = 'tmp_uploads';
+      const it = root.getFoldersByName(name);
+      if (it.hasNext()) return it.next();
+      return root.createFolder(name);
+    } catch (err) {
+      Logger.log('getTempFolder error: ' + err);
+      throw err;
+    }
+  },
+
+  saveUploadChunk: function(uploadId, index, chunk) {
+    try {
+      const folder = this.getTempFolder();
+      const fileName = `${uploadId}_part_${index}`;
+      const files = folder.getFilesByName(fileName);
+      if (files.hasNext()) {
+        const f = files.next();
+        f.setContent(chunk);
+      } else {
+        folder.createFile(fileName, chunk, 'text/plain');
+      }
+      return true;
+    } catch (err) {
+      Logger.log('saveUploadChunk error: ' + err);
+      return err.toString();
+    }
+  },
+
+  assembleUploadParts: function(uploadId) {
+    try {
+      const folder = this.getTempFolder();
+      const files = folder.getFiles();
+      const parts = [];
+      while (files.hasNext()) {
+        const f = files.next();
+        const n = f.getName();
+        if (n.indexOf(uploadId + '_part_') === 0) {
+          const idx = parseInt(n.split('_part_')[1], 10);
+          parts.push({ idx: idx, content: f.getBlob().getDataAsString() });
+        }
+      }
+
+      if (!parts.length) return { success: false, error: 'no parts found' };
+      parts.sort((a,b) => a.idx - b.idx);
+      const assembled = parts.map(p => p.content).join('');
+      return { success: true, data: assembled };
+    } catch (err) {
+      Logger.log('assembleUploadParts error: ' + err);
+      return { success: false, error: err.toString() };
+    }
+  },
+
+  cleanupUploadParts: function(uploadId) {
+    try {
+      const folder = this.getTempFolder();
+      const files = folder.getFiles();
+      const deleted = [];
+      while (files.hasNext()) {
+        const f = files.next();
+        if (f.getName().indexOf(uploadId + '_part_') === 0) {
+          deleted.push(f.getName());
+          f.setTrashed(true);
+        }
+      }
+      return { success: true, deletedCount: deleted.length };
+    } catch (err) {
+      Logger.log('cleanupUploadParts error: ' + err);
+      return { success: false, error: err.toString() };
+    }
+  },
+
   /**
    * 刪除照片
    * @param {string} photoId - Google Drive 文件 ID

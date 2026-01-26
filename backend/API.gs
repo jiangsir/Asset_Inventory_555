@@ -76,6 +76,12 @@ function doPost(e) {
       case 'uploadPhoto':
         result = handleUploadPhoto(data);
         break;
+      case 'uploadChunk':
+        result = handleUploadChunk(data);
+        break;
+      case 'finishUpload':
+        result = handleFinishUpload(data);
+        break;
       case 'deletePhoto':
         result = handleDeletePhoto(data);
         break;
@@ -268,6 +274,64 @@ function handleUploadPhoto(data) {
     return sendResponse({success: false, error: error.toString()}, 500);
   }
 }
+
+/**
+ * 處理上傳分片
+ * 接收：{ uploadId, index, total, chunk }
+ */
+function handleUploadChunk(data) {
+  if (!data || !data.uploadId || data.index === undefined || !data.chunk) {
+    return sendResponse({ success: false, error: '缺少 uploadId/index/chunk' }, 400);
+  }
+
+  try {
+    const uploadId = String(data.uploadId);
+    const index = parseInt(data.index, 10);
+    const chunk = String(data.chunk);
+
+    const res = DriveManager.saveUploadChunk(uploadId, index, chunk);
+    return sendResponse({ success: res === true, message: res === true ? 'chunk saved' : res });
+  } catch (err) {
+    Logger.log('[handleUploadChunk] ' + err);
+    return sendResponse({ success: false, error: err.toString() }, 500);
+  }
+}
+
+/**
+ * 完成分片上傳並組合（接收 uploadId, code, photoName）
+ */
+function handleFinishUpload(data) {
+  if (!data || !data.uploadId || !data.code) {
+    return sendResponse({ success: false, error: '缺少 uploadId 或 code' }, 400);
+  }
+
+  try {
+    const uploadId = String(data.uploadId);
+    const code = String(data.code);
+    const photoName = data.photoName || null;
+
+    const assembled = DriveManager.assembleUploadParts(uploadId);
+    if (!assembled || !assembled.success) {
+      return sendResponse({ success: false, error: assembled && assembled.error ? assembled.error : '組合失敗' }, 500);
+    }
+
+    const base64 = assembled.data;
+    const result = DriveManager.uploadPhoto(code, base64, photoName);
+
+    // 清理零散檔案
+    DriveManager.cleanupUploadParts(uploadId);
+
+    if (result.success) {
+      return sendResponse({ success: true, photo: result.photo });
+    }
+
+    return sendResponse({ success: false, error: result.error || '上傳失敗' }, 500);
+  } catch (err) {
+    Logger.log('[handleFinishUpload] ' + err);
+    return sendResponse({ success: false, error: err.toString() }, 500);
+  }
+}
+
 
 /**
  * 刪除照片

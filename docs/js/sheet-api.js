@@ -150,14 +150,88 @@ const sheetApi = {
   },
 
   /**
-   * 上傳照片
+   * 上傳照片（自動分片處理與進度回調）
+   * - 對於小檔案直接走單一請求
+   * - 對於大於 CHUNK_SIZE 的 base64，採用分片上傳
    */
-  uploadPhoto: async function(photoData) {
-    return this.request('uploadPhoto', 'POST', {
-      code: photoData.code,
-      photoBase64: photoData.photoBase64,
-      photoName: photoData.photoName || null
-    });
+  uploadPhoto: async function(photoData, onProgress = null) {
+    const CHUNK_SIZE = 100 * 1024; // 100k chars per chunk (~75KB binary)
+
+    if (!photoData || !photoData.photoBase64) {
+      throw new Error('missing photoBase64');
+    }
+
+    const b64 = photoData.photoBase64;
+    if (b64.length <= CHUNK_SIZE) {
+      // 小檔案直接上傳（原始路徑）
+      return this.request('uploadPhoto', 'POST', {
+        code: photoData.code,
+        photoBase64: b64,
+        photoName: photoData.photoName || null
+      });
+    }
+
+    // 大檔案：分片上傳
+    return this.uploadPhotoChunked(photoData.code, b64, photoData.photoName || null, CHUNK_SIZE, onProgress);
+  },
+
+  /**
+   * 分片上傳實作
+   */
+  uploadPhotoChunked: async function(code, photoBase64, photoName = null, chunkSize = 100*1024, onProgress = null) {
+    const total = Math.ceil(photoBase64.length / chunkSize);
+    const uploadId = `${code}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+
+    for (let i = 0; i < total; i++) {
+      const start = i * chunkSize;
+      const chunk = photoBase64.slice(start, start + chunkSize);
+
+      // 重試機制
+      const MAX_RETRIES = 3;
+      let attempt = 0;
+      let ok = false;
+      let lastErr = null;
+
+      while (attempt < MAX_RETRIES && !ok) {
+        try {
+          await this.request('uploadChunk', 'POST', { uploadId, index: i, total, chunk });
+          ok = true;
+        } catch (err) {
+          attempt++;
+          lastErr = err;
+          console.warn(`uploadChunk attempt ${attempt} failed for ${uploadId}#${i}`, err);
+          // 小延遲再重試
+          await new Promise(r => setTimeout(r, 300 * attempt));
+        }
+      }
+
+      if (!ok) {
+        throw new Error('上傳分片失敗：' + (lastErr && lastErr.message));
+      }
+
+      if (typeof onProgress === 'function') {
+        try { onProgress(Math.round(((i+1)/total)*100), i, total); } catch(e){/* ignore */}
+      }
+    }
+
+    // 通知後端組合並完成上傳
+    const finishResult = await this.request('finishUpload', 'POST', { uploadId, code, photoName });
+    return finishResult;
+  },
+
+
+  /**
+   * 單一分片上傳（保留，供未來直接呼叫）
+   */
+  uploadChunk: async function(uploadId, index, chunk, total) {
+    return this.request('uploadChunk', 'POST', { uploadId, index, chunk, total });
+  },
+
+  /**
+   * 通知後端完成上傳並組合分片
+   */
+  finishUpload: async function(uploadId, code, photoName = null) {
+    return this.request('finishUpload', 'POST', { uploadId, code, photoName });
   },
 
   /**
