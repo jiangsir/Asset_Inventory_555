@@ -247,6 +247,22 @@ const sheetApi = {
   },
 
   /**
+   * 透過後端 proxy 取得 Drive 檔案的 base64（回傳 { success, mime, data }）
+   */
+  getPhoto: async function(fileId) {
+    if (!fileId) return { success: false, error: 'missing fileId' };
+    return this.request('servePhoto', 'GET', { fileId });
+  },
+
+  /**
+   * 把資產的最新照片設為公開並回傳 public URL
+   */
+  makeLatestPhotoPublic: async function(code) {
+    if (!code) return { success: false, error: 'missing code' };
+    return this.request('makeLatestPhotoPublic', 'POST', { code });
+  }
+
+  /**
    * 測試 API 連接
    */
   testConnection: async function() {
