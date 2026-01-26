@@ -241,11 +241,34 @@ const camera = {
   },
 
   /**
-   * 顯示照片預覽
+   * 顯示照片預覽（等圖片真正 load 完成再啟用確認按鈕）
    */
   showPhotoPreview: function(photoDataUrl) {
     const modal = document.getElementById('photoModal');
     const preview = document.getElementById('photoPreview');
+    const confirmBtn = document.getElementById('photoConfirmBtn');
+
+    // 先禁用，等 load 完成再啟用
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.setAttribute('aria-disabled', 'true');
+    }
+
+    // 確保只有當圖片成功載入後才啟用按鈕
+    preview.onload = () => {
+      console.log('[showPhotoPreview] image loaded — enabling confirm button');
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.removeAttribute('aria-disabled');
+      }
+    };
+    preview.onerror = () => {
+      console.warn('[showPhotoPreview] image failed to load — keeping confirm disabled');
+      if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.setAttribute('aria-disabled', 'true');
+      }
+    };
 
     preview.src = photoDataUrl;
     modal.style.display = 'flex';
@@ -255,14 +278,23 @@ const camera = {
    * 確認照片
    */
   confirmPhoto: async function() {
+    const confirmBtn = document.getElementById('photoConfirmBtn');
+    if (confirmBtn) {
+      confirmBtn.disabled = true; // 防止 double-click
+      confirmBtn.setAttribute('aria-disabled', 'true');
+    }
+
+    // 最後一次驗證
     if (!this.capturedPhoto || !ui.currentAsset) {
-      ui.showNotification('error', '錯誤', '缺少必需信息');
+      ui.showNotification('error', '錯誤', '缺少必需信息（請重新拍照或選擇照片）');
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.removeAttribute('aria-disabled');
+      }
       return;
     }
 
-    // 關閉預覽
-    this.closePhotoPreview();
-
+    // 保留預覽直到上傳開始（不要馬上 close，避免使用者看不到進度）
     // 關閉相機
     this.closeCamera();
 
@@ -270,37 +302,36 @@ const camera = {
     ui.showLoading('正在上傳照片...');
 
     try {
-      // 先 log 以便排查 capturedPhoto 在呼叫時是否存在或已被覆蓋
-      console.log('[confirmPhoto] capturedPhoto present?', !!this.capturedPhoto, 'length=', this.capturedPhoto ? this.capturedPhoto.length : 0);
-      console.log('[confirmPhoto] ui.currentAsset.code=', ui && ui.currentAsset ? ui.currentAsset.code : 'NO_ASSET');
-
-      // 使用 app.uploadPhoto（支援 progress callback 與分片上傳）
+      console.log('[confirmPhoto] starting upload — capturedPhoto length=', this.capturedPhoto.length);
       const result = await app.uploadPhoto(this.capturedPhoto, 'photo.jpg', (percent, idx, total) => {
         console.log(`upload progress: ${percent}% (${idx+1}/${total})`);
       });
 
       if (result && result.success) {
-        // 添加到當前資產的照片列表
-        if (!ui.currentAsset.photos) {
-          ui.currentAsset.photos = [];
-        }
-
+        if (!ui.currentAsset.photos) ui.currentAsset.photos = [];
         ui.currentAsset.photos.push(result.photo);
-
-        // 更新 UI
         ui.displayPhotos(ui.currentAsset.photos);
         ui.showNotification('success', '上傳成功', '照片已保存');
+        // 關閉預覽（上傳成功後）
+        this.closePhotoPreview();
       } else {
         ui.showNotification('error', '上傳失敗', (result && result.error) || '未知錯誤');
       }
     } catch (error) {
-      console.error('上傳錯誤:', error);
-      ui.showNotification('error', '錯誤', error.message);
+      console.error('[confirmPhoto] upload error:', error);
+      ui.showNotification('error', '錯誤', error.message || String(error));
     } finally {
       ui.hideLoading();
-      this.capturedPhoto = null;
+      // 只有在成功或使用者取消時才清除 capturedPhoto；若失敗，保留以便重試
+      if (!confirmBtn) {
+        this.capturedPhoto = null;
+      } else {
+        // re-disable until next preview
+        confirmBtn.disabled = true;
+        confirmBtn.setAttribute('aria-disabled', 'true');
+      }
     }
-  },
+  }
 
   /**
    * 取消照片
@@ -316,8 +347,13 @@ const camera = {
    */
   closePhotoPreview: function() {
     const modal = document.getElementById('photoModal');
+    const confirmBtn = document.getElementById('photoConfirmBtn');
     modal.style.display = 'none';
     this.capturedPhoto = null;
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.setAttribute('aria-disabled', 'true');
+    }
   },
 
   /**

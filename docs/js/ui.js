@@ -189,9 +189,18 @@ const ui = {
   viewPhoto: function(url) {
     const modal = document.getElementById('photoModal');
     const preview = document.getElementById('photoPreview');
+    const confirmBtn = document.getElementById('photoConfirmBtn');
+
+    // 在觀看已上傳的照片時，確認按鈕不應可用
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.setAttribute('aria-disabled', 'true');
+    }
+
     preview.src = url;
     modal.style.display = 'flex';
   },
+
 
   /**
    * 刪除照片
