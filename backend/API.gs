@@ -21,10 +21,6 @@ function doGet(e) {
       case 'getRecentAssets':
         result = handleGetRecentAssets(e.parameter.limit);
         break;
-      case 'servePhoto':
-        // 透過 proxy 提供私有 Drive 圖片的 base64（前端會將其轉為 data:URI）
-        result = handleServePhoto(e.parameter.fileId);
-        break;
       case 'test':
         result = {success: true, message: '測試成功', timestamp: new Date().toISOString()};
         break;
@@ -85,9 +81,6 @@ function doPost(e) {
         break;
       case 'finishUpload':
         result = handleFinishUpload(data);
-        break;
-      case 'makeLatestPhotoPublic':
-        result = handleMakeLatestPhotoPublic(data);
         break;
       case 'deletePhoto':
         result = handleDeletePhoto(data);
@@ -366,48 +359,6 @@ function handleDeletePhoto(data) {
     return sendResponse({success: false, error: error.toString()}, 500);
   }
 }
-
-/**
- * 透過 proxy 提供 Drive 檔案的 base64（安全選項：僅限已登入或指定來源）
- * 回傳格式：{ success: true, mime: 'image/jpeg', data: '<base64>' }
- */
-function handleServePhoto(fileId) {
-  if (!fileId) {
-    return sendResponse({ success: false, error: 'missing fileId' }, 400);
-  }
-
-  try {
-    const file = DriveApp.getFileById(fileId);
-    if (!file) {
-      return sendResponse({ success: false, error: 'file not found' }, 404);
-    }
-
-    const blob = file.getBlob();
-    const mime = blob.getContentType();
-    const b64 = Utilities.base64Encode(blob.getBytes());
-
-    return sendResponse({ success: true, mime: mime, data: b64 });
-  } catch (err) {
-    Logger.log('[handleServePhoto] ' + err);
-    return sendResponse({ success: false, error: err.toString() }, 500);
-  }
-}
-
-function handleMakeLatestPhotoPublic(data) {
-  if (!data || !data.code) return sendResponse({ success: false, error: 'missing code' }, 400);
-  try {
-    const latest = DriveManager.getLatestPhoto(data.code);
-    if (!latest) return sendResponse({ success: false, error: 'no photo found for code ' + data.code }, 404);
-
-    const pub = DriveManager.setFilePublic(latest.id);
-    if (!pub || !pub.success) return sendResponse({ success: false, error: pub && pub.error ? pub.error : 'failed to make public' }, 500);
-
-    return sendResponse({ success: true, publicUrl: pub.url, fileId: pub.id });
-  } catch (err) {
-    Logger.log('[handleMakeLatestPhotoPublic] ' + err);
-    return sendResponse({ success: false, error: err.toString() }, 500);
-  }
-} 
 
 // ============================================
 // 輔助函數

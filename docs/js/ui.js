@@ -170,7 +170,7 @@ const ui = {
       const div = document.createElement('div');
       div.className = 'photo-item';
       div.innerHTML = `
-        <img src="${photo.url}" alt="照片 ${index + 1}" onclick="ui.viewPhoto('${photo.url}','${photo.id || ''}')" onerror="(async (el, pid)=>{console.warn('direct image load failed, trying proxy', pid); if(!pid) return; try{ const res = await window.sheetApi.getPhoto(pid); if(res && res.success) el.src = 'data:'+res.mime+';base64,'+res.data; }catch(e){console.error(e);} })(this,'${photo.id || ''}')">
+        <img src="${photo.url}" alt="照片 ${index + 1}" onclick="ui.viewPhoto('${photo.url}')">
         <button class="photo-remove" onclick="ui.removePhoto(${index})">✕</button>
       `;
       gallery.appendChild(div);
@@ -186,7 +186,7 @@ const ui = {
   /**
    * 查看照片
    */
-  viewPhoto: async function(url, fileId = null) {
+  viewPhoto: function(url) {
     const modal = document.getElementById('photoModal');
     const preview = document.getElementById('photoPreview');
     const confirmBtn = document.getElementById('photoConfirmBtn');
@@ -197,52 +197,8 @@ const ui = {
       confirmBtn.setAttribute('aria-disabled', 'true');
     }
 
-    // 如果傳入 fileId（Drive 私有檔案），使用 proxy 取圖
-    if (fileId) {
-      preview.src = '';
-      modal.style.display = 'flex';
-      try {
-        const res = await sheetApi.getPhoto(fileId);
-        if (res && res.success && res.data) {
-          preview.src = 'data:' + res.mime + ';base64,' + res.data;
-        } else {
-          console.warn('getPhoto proxy failed', res);
-          preview.src = url; // fallback
-        }
-      } catch (err) {
-        console.error('proxy fetch failed', err);
-        preview.src = url;
-      }
-      return;
-    }
-
-    // 否則用原本的 url
     preview.src = url;
     modal.style.display = 'flex';
-  },
-
-  /**
-   * 顯示照片
-   */
-  displayPhotos: function(photos = []) {
-    const gallery = document.getElementById('photoGallery');
-    gallery.innerHTML = '';
-
-    photos.forEach((photo, index) => {
-      const div = document.createElement('div');
-      div.className = 'photo-item';
-      div.innerHTML = `
-        <img src="${photo.url}" alt="照片 ${index + 1}" onclick="ui.viewPhoto('${photo.url}')">
-        <button class="photo-remove" onclick="ui.removePhoto(${index})">✕</button>
-      `;
-      gallery.appendChild(div);
-    });
-
-    // 更新照片計數
-    const limit = app.config.photoLimit;
-    const limitText = limit === 0 ? '無限制' : `最多 ${limit} 張`;
-    document.getElementById('photoHint').textContent = 
-      `已上傳 ${photos.length} 張 / ${limitText}`;
   },
 
 

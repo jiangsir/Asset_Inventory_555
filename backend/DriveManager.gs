@@ -165,51 +165,6 @@ const DriveManager = {
     }
   },
 
-  /**
-   * 取得資產資料夾中最新的一張照片（依檔案建立或上傳時間排序）
-   * 回傳 null 或 { id, name, url, mimeType, size }
-   */
-  getLatestPhoto: function(assetCode) {
-    try {
-      const assetFolder = this.getAssetFolder(assetCode);
-      const files = assetFolder.getFiles();
-      let latest = null;
-      while (files.hasNext()) {
-        const f = files.next();
-        if (!f.getMimeType().startsWith('image/')) continue;
-        const info = {
-          id: f.getId(),
-          name: f.getName(),
-          url: f.getUrl(),
-          mimeType: f.getMimeType(),
-          size: f.getSize(),
-          time: f.getLastUpdated()
-        };
-        if (!latest || info.time > latest.time) latest = info;
-      }
-      return latest;
-    } catch (err) {
-      Logger.log('getLatestPhoto error: ' + err);
-      return null;
-    }
-  },
-
-  /**
-   * 將指定檔案設為 Anyone-with-link（檢視）並回傳可直接嵌入的 preview URL
-   */
-  setFilePublic: function(fileId) {
-    try {
-      const file = DriveApp.getFileById(fileId);
-      if (!file) return { success: false, error: 'file not found' };
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      const publicUrl = 'https://drive.google.com/uc?export=view&id=' + file.getId();
-      return { success: true, url: publicUrl, id: file.getId() };
-    } catch (err) {
-      Logger.log('setFilePublic error: ' + err);
-      return { success: false, error: err.toString() };
-    }
-  }, 
-
   cleanupUploadParts: function(uploadId) {
     try {
       const folder = this.getTempFolder();
