@@ -264,6 +264,17 @@ const sheetApi = {
   },
 
   /**
+   * 取回 Drive 檔案的 dataURL（proxy，由 Apps Script 提供）
+   * 參數：fileId 或 code
+   */
+  getPhoto: async function({ fileId = null, code = null } = {}) {
+    const params = {};
+    if (fileId) params.fileId = fileId;
+    if (code) params.code = code;
+    return this.request('servePhoto', 'GET', params);
+  },
+
+  /**
    * 刪除照片
    */
   deletePhoto: async function(photoId) {

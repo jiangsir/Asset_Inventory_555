@@ -166,14 +166,101 @@ const ui = {
     const gallery = document.getElementById('photoGallery');
     gallery.innerHTML = '';
 
+    // 簡單快取，避免重複向後端請求相同縮圖
+    this._photoCache = this._photoCache || {};
+
     photos.forEach((photo, index) => {
       const div = document.createElement('div');
       div.className = 'photo-item';
-      div.innerHTML = `
-        <img src="${photo.url}" alt="照片 ${index + 1}" onclick="ui.viewPhoto('${photo.url}')">
-        <button class="photo-remove" onclick="ui.removePhoto(${index})">✕</button>
-      `;
+
+      // placeholder img (會被 async 填入 src)
+      const img = document.createElement('img');
+      img.alt = `照片 ${index + 1}`;
+      img.dataset.photoIndex = index;
+      img.className = 'photo-thumb';
+      img.src = '';
+      img.onload = () => { img.classList.remove('loading'); };
+      img.onerror = () => { img.classList.add('broken'); img.alt = `照片 ${index + 1}`; };
+
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'photo-remove';
+      removeBtn.textContent = '✕';
+      removeBtn.onclick = () => ui.removePhoto(index);
+
+      div.appendChild(img);
+      div.appendChild(removeBtn);
       gallery.appendChild(div);
+
+      // 決定如何取得可用的 src：
+      // - 若 photo.url 是一般可直接嵌入的圖檔（非 private Drive），直接使用
+      // - 若 photo.id 存在或 URL 為 Drive 的 webView，使用後端 proxy servePhoto 取得 dataURL
+      const isLikelyDirect = photo.url && (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(photo.url) || /googleusercontent\.com/.test(photo.url));
+
+      if (isLikelyDirect) {
+        img.src = photo.url;
+        img.onclick = () => ui.viewPhoto(photo.url);
+      } else if (photo.id) {
+        const cacheKey = `id:${photo.id}`;
+        if (this._photoCache[cacheKey]) {
+          img.src = this._photoCache[cacheKey];
+          img.onclick = () => ui.viewPhoto(this._photoCache[cacheKey]);
+        } else {
+          img.classList.add('loading');
+          // async fetch via proxy
+          sheetApi.getPhoto({ fileId: photo.id }).then(res => {
+            if (res && res.success && res.dataUrl) {
+              this._photoCache[cacheKey] = res.dataUrl;
+              img.src = res.dataUrl;
+              img.onclick = () => ui.viewPhoto(res.dataUrl);
+              return;
+            }
+
+            // 若檔案過大無法 inline，嘗試使用通用的 Drive embed URL（若檔案為私有，瀏覽器仍可能無法載入）
+            if (res && res.error === 'file_too_large_for_inline_preview') {
+              const uc = 'https://drive.google.com/uc?export=view&id=' + photo.id;
+              this._photoCache[cacheKey] = uc;
+              img.src = uc;
+              img.onclick = () => ui.viewPhoto(uc);
+              return;
+            }
+
+            console.warn('servePhoto failed for', photo.id, res && res.error);
+            img.classList.add('broken');
+          }).catch(err => {
+            console.warn('servePhoto error', err);
+            img.classList.add('broken');
+          });
+        }
+      } else if (photo.url && /drive\.google\.com/.test(photo.url)) {
+        // Drive webView link without id field — try to extract id then proxy
+        const m = (photo.url.match(/[-\w]{25,}/) || [])[0];
+        if (m) {
+          const cacheKey = `id:${m}`;
+          if (this._photoCache[cacheKey]) {
+            img.src = this._photoCache[cacheKey];
+            img.onclick = () => ui.viewPhoto(this._photoCache[cacheKey]);
+          } else {
+            img.classList.add('loading');
+            sheetApi.getPhoto({ fileId: m }).then(res => {
+              if (res && res.success && res.dataUrl) {
+                this._photoCache[cacheKey] = res.dataUrl;
+                img.src = res.dataUrl;
+                img.onclick = () => ui.viewPhoto(res.dataUrl);
+              } else {
+                img.classList.add('broken');
+              }
+            }).catch(() => img.classList.add('broken'));
+          }
+        } else {
+          img.classList.add('broken');
+        }
+      } else if (photo.url) {
+        // 最後的嘗試：直接使用 URL（可能會被瀏覽器阻擋或顯示 broken）
+        img.src = photo.url;
+        img.onclick = () => ui.viewPhoto(photo.url);
+      } else {
+        img.classList.add('broken');
+      }
     });
 
     // 更新照片計數

@@ -21,6 +21,9 @@ function doGet(e) {
       case 'getRecentAssets':
         result = handleGetRecentAssets(e.parameter.limit);
         break;
+      case 'servePhoto':
+        result = handleServePhoto(e.parameter);
+        break;
       case 'test':
         result = {success: true, message: '測試成功', timestamp: new Date().toISOString()};
         break;
@@ -413,6 +416,54 @@ function handleRepairAttach(data) {
     return sendResponse({ success: false, error: attachRes && attachRes.error ? attachRes.error : 'attach_failed', repair: logRes }, 500);
   } catch (err) {
     Logger.log('[handleRepairAttach] exception: ' + err);
+    return sendResponse({ success: false, error: err.toString() }, 500);
+  }
+}
+
+
+/**
+ * 以 base64 dataURL 方式回傳 Drive 檔案（供前端顯示私有圖片預覽）
+ * 支援參數：fileId 或 code（若提供 code，會回傳該資產的 latest photo）
+ */
+function handleServePhoto(params) {
+  try {
+    const fileId = params && params.fileId ? String(params.fileId) : null;
+    const code = params && params.code ? String(params.code) : null;
+
+    let targetFileId = fileId;
+    if (!targetFileId && code) {
+      const latest = DriveManager.getLatestPhoto(code);
+      if (!latest || !latest.success) return sendResponse({ success: false, error: latest && latest.error ? latest.error : 'no photo found' }, 404);
+      targetFileId = latest.photo && latest.photo.id;
+    }
+
+    if (!targetFileId) return sendResponse({ success: false, error: 'missing fileId or code' }, 400);
+
+    // 讀取 Drive 檔案並回傳 dataURL
+    let file;
+    try {
+      file = DriveApp.getFileById(targetFileId);
+    } catch (e) {
+      return sendResponse({ success: false, error: 'invalid fileId or no access' }, 404);
+    }
+
+    const mime = file.getMimeType() || 'image/jpeg';
+    const size = file.getSize() || 0;
+
+    // 保護：限制可內嵌的最大大小（避免一次回傳非常大的二進位）
+    const MAX_INLINE_BYTES = 2.5 * 1024 * 1024; // 2.5MB
+    if (size > MAX_INLINE_BYTES) {
+      return sendResponse({ success: false, error: 'file_too_large_for_inline_preview', size: size }, 413);
+    }
+
+    const blob = file.getBlob();
+    const bytes = blob.getBytes();
+    const b64 = Utilities.base64Encode(bytes);
+    const dataUrl = 'data:' + mime + ';base64,' + b64;
+
+    return sendResponse({ success: true, dataUrl: dataUrl, mime: mime, size: size });
+  } catch (err) {
+    Logger.log('[handleServePhoto] error: ' + err);
     return sendResponse({ success: false, error: err.toString() }, 500);
   }
 }
