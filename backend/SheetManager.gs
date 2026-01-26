@@ -263,25 +263,42 @@ const SheetManager = {
         };
       }
       
-      const sheet = this.getSheet();
-      const rowIndex = existingAssetResult.asset.rowIndex;
-      
-      // 準備更新的行數據
-      const allData = this.getAllData();
-      const row = allData[rowIndex - 1]; // 轉換為 0-based
-      
-      // 更新可編輯字段
+      // 必須在找到該資產的同一張表上寫入（以前用 this.getSheet() 會取到第一張存在的目標表，
+      // 如果資產在不同 sheet 就會導致 row 為 undefined，引發「setting '9'」錯誤）
+      const rowIndex = existingAssetResult.asset.rowIndex; // 1-based
+      const targetSheetName = existingAssetResult.sheetName || this.getSheetName();
+      const ss = this.getSpreadsheet();
+      const sheet = ss.getSheetByName(targetSheetName) || this.getSheet();
+
+      // 讀取該表的資料並做邊界檢查
+      const allData = this.getSheetData(sheet);
+      if (!allData || rowIndex < 1 || rowIndex > allData.length) {
+        Logger.log('[updateAsset] Row index out of range — sheet: ' + targetSheetName + ', rowIndex: ' + rowIndex + ', rows: ' + (allData ? allData.length : 0));
+        return { success: false, error: '資料行不存在或工作表不一致 (sheet: ' + targetSheetName + ')' };
+      }
+
+      // 取得目標列（保險起見，若 row 為 undefined 則建立空陣列）
+      let row = allData[rowIndex - 1] || [];
+
+      // 確保 row 長度至少包含我們要寫入的欄位數量
+      const requiredCols = Math.max(...Object.values(this.COLUMNS).map(c => c.index)) + 1;
+      if (row.length < requiredCols) {
+        for (let i = row.length; i < requiredCols; i++) row[i] = '';
+      }
+
+      // 更新可編輯字段（防禦式寫入）
+      Logger.log('[updateAsset] 更新 ' + targetSheetName + ' 第 ' + rowIndex + ' 行');
       row[this.COLUMNS.J.index] = updateData.location || '';
       row[this.COLUMNS.K.index] = updateData.remark || '';
       row[this.COLUMNS.L.index] = updateData.scrappable || '';
       row[this.COLUMNS.M.index] = JSON.stringify(updateData.photos || []);
       row[this.COLUMNS.N.index] = new Date();
-      
-      // 寫入 Spreadsheet
-      const range = sheet.getRange(rowIndex, 1, 1, row.length);
-      range.setValues([row]);
-      
-      // 返回更新後的資產
+
+      // 寫入 Spreadsheet（指定 columns 長度為 requiredCols，避免短列造成錯誤）
+      const range = sheet.getRange(rowIndex, 1, 1, requiredCols);
+      range.setValues([row.slice(0, requiredCols)]);
+
+      // 重新讀取並回傳更新後的資產資料
       const updatedAssetResult = this.getAssetByCode(updateData.code);
       
       return {
