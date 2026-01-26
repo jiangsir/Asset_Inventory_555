@@ -47,14 +47,28 @@ const sheetApi = {
         method: method
       };
 
-      // POST: 使用 application/x-www-form-urlencoded 傳送 single "payload" 欄位，這是 "simple request"（不會觸發 preflight）。
-      // 服務端（Apps Script）會支援解析此 payload。
+      // POST 處理策略：
+      // - 若包含大欄位（例如 photoBase64），使用 FormData（瀏覽器會設定 multipart/form-data），
+      //   這屬於 simple request（不會觸發 preflight），且能正確傳送大型文本/二進位資料；
+      // - 其他 POST 請求使用 application/x-www-form-urlencoded 並把整個物件放在 payload 欄位（避免 preflight）。
       if (method === 'POST') {
-        options.headers = {
-          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
-        };
-        if (data) {
-          options.body = new URLSearchParams({ payload: JSON.stringify(data) }).toString();
+        if (data && data.photoBase64) {
+          // 大檔案路徑：使用 FormData（不要手動設定 Content-Type）
+          const form = new FormData();
+          // 把常用欄位拆成獨立欄位，方便 Apps Script 直接讀取
+          if (data.code) form.append('code', data.code);
+          if (data.photoBase64) form.append('photoBase64', data.photoBase64);
+          if (data.photoName) form.append('photoName', data.photoName);
+          options.body = form;
+          // 刪除 headers，讓瀏覽器自動設定 boundary
+        } else {
+          // 小型 POST：用 payload 欄位的 urlencoded 字串（避免 preflight）
+          options.headers = {
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+          };
+          if (data) {
+            options.body = new URLSearchParams({ payload: JSON.stringify(data) }).toString();
+          }
         }
       }
 

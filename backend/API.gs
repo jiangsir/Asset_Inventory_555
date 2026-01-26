@@ -50,6 +50,14 @@ function doPost(e) {
         data = {};
         Logger.log('doPost: failed to parse e.parameter.payload');
       }
+    } else if (e.parameter && (e.parameter.photoBase64 || e.parameter.code)) {
+      // 支援 multipart/form-data 或瀏覽器以 FormData 發送的情況（欄位會出現在 e.parameter）
+      data = {
+        code: e.parameter.code || null,
+        photoBase64: e.parameter.photoBase64 || null,
+        photoName: e.parameter.photoName || null
+      };
+      Logger.log('doPost: parsed fields from e.parameter (form data) — code=' + (data.code ? 'YES' : 'NO') + ', photoBase64 length=' + (data.photoBase64 ? data.photoBase64.length : 0));
     } else if (e.postData && e.postData.contents) {
       try {
         data = JSON.parse(e.postData.contents);
