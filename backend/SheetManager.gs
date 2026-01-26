@@ -551,6 +551,56 @@ const SheetManager = {
   },
 
   /**
+   * 從資產的照片清單中移除一張（依 fileId），並更新 M/N/O... 欄位
+   */
+  removePhotoFromAsset: function(code, photoId) {
+    try {
+      if (!code) return { success: false, error: 'missing code' };
+      if (!photoId) return { success: false, error: 'missing photoId' };
+
+      const existing = this.getAssetByCode(code);
+      if (!existing.asset) return { success: false, error: 'asset not found' };
+
+      const targetSheetName = existing.sheetName || this.getSheetName();
+      const ss = this.getSpreadsheet();
+      const sheet = ss.getSheetByName(targetSheetName);
+      const rowIndex = existing.asset.rowIndex; // 1-based
+
+      const allData = this.getSheetData(sheet);
+      if (!allData || rowIndex < 1 || rowIndex > allData.length) {
+        return { success: false, error: 'row out of range' };
+      }
+
+      const requiredCols = Math.max(...Object.values(this.COLUMNS).map(c => c.index)) + 1;
+      let row = allData[rowIndex - 1] || [];
+      if (row.length < requiredCols) for (let i = row.length; i < requiredCols; i++) row[i] = '';
+
+      const existingPhotos = this.parsePhotos(row[this.COLUMNS.M.index]);
+      const filtered = existingPhotos.filter(p => String(p.id) !== String(photoId));
+
+      // 寫回 Spreadsheet（M 欄或多欄）
+      row[this.COLUMNS.M.index] = this.serializePhotosForSheet(filtered);
+      row[this.COLUMNS.N.index] = new Date();
+
+      const range = sheet.getRange(rowIndex, 1, 1, requiredCols);
+      range.setValues([row.slice(0, requiredCols)]);
+
+      // 更新多欄顯示
+      try {
+        const urls = filtered.map(p => (p && p.url) ? String(p.url).trim() : '').filter(Boolean);
+        this.writePhotosAcrossColumns(sheet, rowIndex, urls, 8);
+      } catch (e) {
+        Logger.log('[removePhotoFromAsset] writePhotosAcrossColumns failed: ' + e);
+      }
+
+      return { success: true, asset: this.getAssetByCode(code).asset };
+    } catch (err) {
+      Logger.log('[removePhotoFromAsset] error: ' + err);
+      return { success: false, error: err && err.toString ? err.toString() : String(err) };
+    }
+  },
+
+  /**
    * 將無法附加到表格的 Drive 照片記錄到 PENDING_ATTACHMENTS 以便後續修復
    */
   logPendingAttachment: function(code, photoInfo, errorMsg, attempts) {

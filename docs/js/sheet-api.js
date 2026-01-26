@@ -275,7 +275,15 @@ const sheetApi = {
   },
 
   /**
-   * 刪除照片
+   * 從 Drive 與 Spreadsheet 原子移除照片（會同時刪除 Drive 檔案與 sheet metadata）
+   * 參數：{ code, photoId }
+   */
+  removePhoto: async function(code, photoId) {
+    return this.request('removePhoto', 'POST', { code, photoId });
+  },
+
+  /**
+   * 刪除照片（僅刪 Drive 檔案）
    */
   deletePhoto: async function(photoId) {
     return this.request('deletePhoto', 'POST', { photoId });

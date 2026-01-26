@@ -283,10 +283,42 @@ const ui = {
   /**
    * 刪除照片
    */
-  removePhoto: function(index) {
-    if (confirm('確定要刪除這張照片嗎？')) {
+  removePhoto: async function(index) {
+    if (!this.currentAsset || !this.currentAsset.photos || !this.currentAsset.photos[index]) return;
+
+    const photo = this.currentAsset.photos[index];
+    if (!confirm('確定要刪除這張照片嗎？')) return;
+
+    // Optimistic UI: disable remove button for this item
+    const gallery = document.getElementById('photoGallery');
+    const item = gallery && gallery.children && gallery.children[index];
+    if (item) item.classList.add('muted');
+
+    try {
+      // 若照片有 Drive file id，呼叫後端原子刪除（Drive + sheet）
+      if (photo.id) {
+        const res = await sheetApi.removePhoto(this.currentAsset.code, photo.id);
+        if (res && (res.success || res.warning)) {
+          // 移除本地並更新視圖
+          this.currentAsset.photos.splice(index, 1);
+          this.displayPhotos(this.currentAsset.photos);
+          ui.showNotification('success', '刪除完成', '照片已從系統移除');
+          return;
+        }
+
+        // 失敗：回滾 UI
+        throw new Error((res && res.error) || 'remove failed');
+      }
+
+      // 若沒有 photo.id（只有 url），只更新 sheet（透過 saveAsset）
       this.currentAsset.photos.splice(index, 1);
+      await app.saveAsset(this.currentAsset);
       this.displayPhotos(this.currentAsset.photos);
+      ui.showNotification('success', '刪除完成', '照片已從記錄移除');
+    } catch (err) {
+      console.warn('removePhoto failed:', err);
+      if (item) item.classList.remove('muted');
+      ui.showNotification('error', '刪除失敗', err && err.message ? err.message : String(err));
     }
   },
 

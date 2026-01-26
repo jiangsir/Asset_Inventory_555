@@ -88,6 +88,9 @@ function doPost(e) {
       case 'repairAttach':
         result = handleRepairAttach(data);
         break;
+      case 'removePhoto':
+        result = handleRemovePhoto(data);
+        break;
       case 'deletePhoto':
         result = handleDeletePhoto(data);
         break;
@@ -493,6 +496,59 @@ function handleDeletePhoto(data) {
     }
   } catch(error) {
     return sendResponse({success: false, error: error.toString()}, 500);
+  }
+}
+
+
+/**
+ * 原子化刪除：刪除 Drive 檔案並從 Spreadsheet 移除該 photo metadata
+ * 接收：{ code, photoId }
+ */
+function handleRemovePhoto(data) {
+  if (!data || !data.code || !data.photoId) return sendResponse({ success: false, error: '缺少 code 或 photoId' }, 400);
+
+  try {
+    const code = String(data.code);
+    const photoId = String(data.photoId);
+
+    // 1) 先嘗試刪除 Drive 檔案（若無權限或不存在，會回傳錯誤，但我們仍會嘗試維持一致性）
+    let driveRes = { success: false };
+    try {
+      driveRes = DriveManager.deletePhoto(photoId) || { success: false };
+    } catch (e) {
+      driveRes = { success: false, error: e && e.toString ? e.toString() : String(e) };
+    }
+
+    // 2) 從 Spreadsheet 移除該照片 metadata
+    let sheetRes = { success: false };
+    try {
+      sheetRes = SheetManager.removePhotoFromAsset(code, photoId);
+    } catch (e) {
+      sheetRes = { success: false, error: e && e.toString ? e.toString() : String(e) };
+    }
+
+    // 3) 組合回傳：希望兩者都成功；若 Drive 刪除失敗但 sheet 成功，將記錄 PendingRepair
+    if (driveRes.success && sheetRes.success) {
+      return sendResponse({ success: true, message: 'Drive & sheet 已刪除', asset: sheetRes.asset });
+    }
+
+    // 若 sheet 成功但 Drive 失敗 -> 記錄並回傳部分成功
+    if (sheetRes.success && !driveRes.success) {
+      const log = SheetManager.logPendingAttachment(code, { id: photoId, name: '' }, 'drive_delete_failed: ' + (driveRes.error || 'unknown'), 0);
+      return sendResponse({ success: true, warning: 'sheet_deleted_drive_failed', driveError: driveRes.error, repair: log, asset: sheetRes.asset });
+    }
+
+    // 若 Drive 成功但 sheet 失敗 -> 記錄並回傳部分成功
+    if (driveRes.success && !sheetRes.success) {
+      const log = SheetManager.logPendingAttachment(code, { id: photoId, name: '' }, 'sheet_remove_failed: ' + (sheetRes.error || 'unknown'), 0);
+      return sendResponse({ success: true, warning: 'drive_deleted_sheet_failed', sheetError: sheetRes.error, repair: log });
+    }
+
+    // 其餘情況視為失敗
+    return sendResponse({ success: false, error: 'remove_failed', drive: driveRes, sheet: sheetRes }, 500);
+  } catch (err) {
+    Logger.log('[handleRemovePhoto] exception: ' + err);
+    return sendResponse({ success: false, error: err.toString() }, 500);
   }
 }
 
