@@ -315,6 +315,10 @@ const camera = {
    * 確認照片
    */
   confirmPhoto: async function() {
+    // 防止重複送出：disable Confirm 按鈕（會在失敗路徑解除）
+    const confirmBtn = document.getElementById('confirmPhotoBtn');
+    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.setAttribute('aria-disabled', 'true'); }
+
     // 如果 this.capturedPhoto 缺失，嘗試多處補救來源（camera 模組、preview 元素、ui.currentAsset.photos）
     if (!this.capturedPhoto) {
       console.log('[confirmPhoto] capturedPhoto missing — attempting fallbacks');
@@ -365,6 +369,7 @@ const camera = {
     }
 
     if (!this.capturedPhoto || !ui.currentAsset) {
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.removeAttribute('aria-disabled'); }
       ui.showNotification('error', '錯誤', '缺少必需信息（請重新拍照或選擇照片）');
       return;
     }
@@ -382,6 +387,7 @@ const camera = {
     // 上傳照片
     ui.showLoading('正在上傳照片...');
 
+    let uploadSucceeded = false;
     try {
       // 先 log 以便排查 capturedPhoto 在呼叫時是否存在或已被覆蓋
       console.log('[confirmPhoto] capturedPhoto present?', !!this.capturedPhoto, 'length=', this.capturedPhoto ? this.capturedPhoto.length : 0);
@@ -393,25 +399,40 @@ const camera = {
       });
 
       if (result && result.success) {
-        // 添加到當前資產的照片列表
-        if (!ui.currentAsset.photos) {
-          ui.currentAsset.photos = [];
-        }
+        uploadSucceeded = true;
+        // 添加到當前資產的照片列表（放最前面以便即時看到）
+        if (!ui.currentAsset.photos) ui.currentAsset.photos = [];
+        ui.currentAsset.photos.unshift(result.photo);
 
-        ui.currentAsset.photos.push(result.photo);
+        // 關閉預覽視窗並清除暫存（使用者期望畫面消失）
+        try { this.closePhotoPreview(); } catch (e) { /* ignore */ }
 
         // 更新 UI
         ui.displayPhotos(ui.currentAsset.photos);
-        ui.showNotification('success', '上傳成功', '照片已保存');
+
+        // 顯示成功或部分成功訊息
+        if (result.warning) {
+          ui.showNotification('warning', '上傳部分完成', result.warning);
+        } else {
+          ui.showNotification('success', '上傳成功', '照片已保存');
+        }
       } else {
+        // 若失敗，保留預覽並允許重新按下 Confirm
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.removeAttribute('aria-disabled'); }
         ui.showNotification('error', '上傳失敗', (result && result.error) || '未知錯誤');
       }
     } catch (error) {
       console.error('上傳錯誤:', error);
-      ui.showNotification('error', '錯誤', error.message);
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.removeAttribute('aria-disabled'); }
+      ui.showNotification('error', '錯誤', error && error.message ? error.message : String(error));
     } finally {
       ui.hideLoading();
-      this.capturedPhoto = null;
+      // 只有在上傳成功時才清除 capturedPhoto（closePhotoPreview 已處理）
+      if (!uploadSucceeded) {
+        // 保留 this.capturedPhoto 以利使用者重試或檢查預覽
+      } else {
+        this.capturedPhoto = null;
+      }
     }
   },
 
