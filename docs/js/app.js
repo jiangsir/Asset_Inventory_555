@@ -232,11 +232,11 @@ const app = {
     ui.showLoading('正在上傳照片...');
 
     // 防禦式檢查並輸出日誌；如果沒有傳入，嘗試從 camera 或 ui.currentAsset 補救
-    console.log('[app.uploadPhoto] received photoBase64?', !!photoBase64, 'length=', photoBase64 ? photoBase64.length : 0, 'assetCode=', ui && ui.currentAsset ? ui.currentAsset.code : 'NO_ASSET');
+    console.log('[app.uploadPhoto] received photoBase64?', !!photoBase64, 'length=', photoBase64 ? (photoBase64.length || 'undefined') : 0, 'assetCode=', ui && ui.currentAsset ? ui.currentAsset.code : 'NO_ASSET');
     if (!photoBase64) {
       // 嘗試 fallback
       const fallback = (window.camera && window.camera.capturedPhoto) || (ui && ui.currentAsset && ui.currentAsset.photos && ui.currentAsset.photos[0]) || null;
-      console.log('[app.uploadPhoto] fallback detected?', !!fallback, fallback ? fallback.length : 0);
+      console.log('[app.uploadPhoto] fallback detected?', !!fallback, fallback ? (fallback.length || 'undefined') : 0);
       if (fallback) {
         photoBase64 = fallback;
       } else {
@@ -248,6 +248,30 @@ const app = {
       }
     }
 
+    // 如果傳入的是 object（例如 {url:...}），嘗試把遠端圖抓下來轉 base64
+    if (typeof photoBase64 === 'object' && photoBase64 !== null) {
+      if (photoBase64.url) {
+        try {
+          console.log('[app.uploadPhoto] resolving photo object.url -> base64');
+          const b64 = await (window.barcodeScanner && window.barcodeScanner.fetchImageAsBase64 ? window.barcodeScanner.fetchImageAsBase64(photoBase64.url) : null);
+          if (b64) photoBase64 = b64;
+        } catch (e) {
+          console.warn('[app.uploadPhoto] failed to fetch object.url as base64', e);
+        }
+      } else if (photoBase64.photoBase64) {
+        photoBase64 = photoBase64.photoBase64;
+      }
+    }
+
+    // 最終型態檢查：必須是字串且有長度
+    if (typeof photoBase64 !== 'string' || !Number.isFinite(photoBase64.length)) {
+      const msg = 'invalid photo data (expected base64 string)';
+      console.error('[app.uploadPhoto] ' + msg, photoBase64);
+      ui.showNotification('error', '上傳失敗', msg);
+      ui.hideLoading();
+      throw new Error(msg);
+    }
+
     try {
       const result = await sheetApi.uploadPhoto({
         code: ui.currentAsset.code,
@@ -255,12 +279,12 @@ const app = {
         photoName: fileName
       }, onProgress);
 
-      if (result.success) {
+      if (result && result.success) {
         ui.showNotification('success', '上傳成功', '照片已保存');
-        return result.photo;
+        return result;
       } else {
-        ui.showNotification('error', '上傳失敗', result.error || '無法上傳照片');
-        return null;
+        ui.showNotification('error', '上傳失敗', result && result.error || '無法上傳照片');
+        return result;
       }
     } catch (error) {
       console.error('上傳錯誤:', error);

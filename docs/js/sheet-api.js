@@ -166,7 +166,17 @@ const sheetApi = {
       throw new Error('missing photoBase64 (' + codeInfo + '). Ensure the caller passes the base64 string or that camera.read completed.');
     }
 
-    const b64 = photoData.photoBase64;
+    // 防禦式：如果傳入的是物件（例如 {url:...}），不要盲目傳到後端
+    let b64 = photoData.photoBase64;
+    if (typeof b64 === 'object' && b64 !== null) {
+      if (b64.photoBase64) b64 = b64.photoBase64;
+      else throw new Error('photoBase64 must be a base64 string or data:URI');
+    }
+
+    if (typeof b64 !== 'string' || !Number.isFinite(b64.length)) {
+      throw new Error('invalid photoBase64 (expected string with length)');
+    }
+
     if (b64.length <= CHUNK_SIZE) {
       // 小檔案直接上傳（原始路徑）
       return this.request('uploadPhoto', 'POST', {
@@ -185,8 +195,10 @@ const sheetApi = {
    */
   uploadPhotoChunked: async function(code, photoBase64, photoName = null, chunkSize = 100*1024, onProgress = null) {
     const total = Math.ceil(photoBase64.length / chunkSize);
+    if (!Number.isFinite(total) || total <= 0) throw new Error('invalid photo length for chunking');
     const uploadId = `${code}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
 
+    let uploadedParts = 0;
     for (let i = 0; i < total; i++) {
       const start = i * chunkSize;
       const chunk = photoBase64.slice(start, start + chunkSize);
@@ -201,6 +213,7 @@ const sheetApi = {
         try {
           await this.request('uploadChunk', 'POST', { uploadId, index: i, total, chunk });
           ok = true;
+          uploadedParts++;
         } catch (err) {
           attempt++;
           lastErr = err;
@@ -218,6 +231,8 @@ const sheetApi = {
         try { onProgress(Math.round(((i+1)/total)*100), i, total); } catch(e){/* ignore */}
       }
     }
+
+    if (uploadedParts === 0) throw new Error('no chunks were uploaded');
 
     // 通知後端組合並完成上傳
     const finishResult = await this.request('finishUpload', 'POST', { uploadId, code, photoName });

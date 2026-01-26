@@ -213,6 +213,17 @@ const SheetManager = {
    * 格式化財產數據為對象
    */
   formatAssetData: function(row, rowIndex) {
+    // collect photos from M and adjacent columns (M,N,O...) to support per-cell images
+    const maxCols = 8; // M + up to 7 extra cols
+    const photosCells = [];
+    for (let i = 0; i < maxCols; i++) {
+      const colIdx = this.COLUMNS.M.index + i;
+      if (colIdx < row.length) {
+        const v = row[colIdx];
+        if (v !== undefined && v !== null && String(v).trim() !== '') photosCells.push(v);
+      }
+    }
+
     return {
       rowIndex: rowIndex + 1, // 1-based for Spreadsheet
       code: String(row[this.COLUMNS.B.index] || ''),
@@ -227,7 +238,7 @@ const SheetManager = {
       location: String(row[this.COLUMNS.J.index] || ''),
       remark: String(row[this.COLUMNS.K.index] || ''),
       scrappable: String(row[this.COLUMNS.L.index] || ''),
-      photos: this.parsePhotos(row[this.COLUMNS.M.index]),
+      photos: this.parsePhotos(photosCells.length === 1 ? photosCells[0] : photosCells),
       editTime: row[this.COLUMNS.N.index] || ''
     };
   },
@@ -345,6 +356,47 @@ const SheetManager = {
   },
 
   /**
+   * 將多個 URL 分別寫入 M, N, O... 多個 cell（每個 cell 一個 URL），並把每個 cell 設為可點擊的超連結
+   * - maxCols: 最多寫入的欄位數（避免無限擴張）
+   */
+  writePhotosAcrossColumns: function(sheet, rowIndex, urls, maxCols = 8) {
+    try {
+      if (!sheet || !rowIndex) return { success: false, error: 'missing sheet or rowIndex' };
+      const startCol = this.COLUMNS.M.index + 1;
+      const toWrite = (urls || []).slice(0, maxCols).map(u => (u || '').toString().trim());
+
+      // 準備 values array（1 row x maxCols）
+      const values = [new Array(maxCols).fill('')];
+      for (let i = 0; i < toWrite.length; i++) values[0][i] = toWrite[i];
+
+      // 清空目標範圍再寫入（避免殘留）
+      const range = sheet.getRange(rowIndex, startCol, 1, maxCols);
+      range.clearContent();
+      range.setValues(values);
+      range.setWrap(true);
+
+      // 設置每個 cell 的 RichText hyperlink（逐個處理以避免 API 限制）
+      for (let i = 0; i < toWrite.length; i++) {
+        const url = toWrite[i];
+        if (!url) continue;
+        try {
+          const cell = sheet.getRange(rowIndex, startCol + i);
+          const rich = SpreadsheetApp.newRichTextValue().setText(url).setLinkUrl(0, url.length, url).build();
+          cell.setRichTextValue(rich);
+        } catch (e) {
+          Logger.log('[writePhotosAcrossColumns] failed to set link for col=' + (startCol + i) + ': ' + e);
+          // 回退：直接寫入純文字（已在 values 裡）
+        }
+      }
+
+      return { success: true, written: toWrite.length };
+    } catch (err) {
+      Logger.log('[writePhotosAcrossColumns] error: ' + err);
+      return { success: false, error: err && err.toString ? err.toString() : String(err) };
+    }
+  },
+
+  /**
    * 更新財產數據
    */
   updateAsset: function(updateData) {
@@ -398,8 +450,8 @@ const SheetManager = {
         const parsed = this.parsePhotos(row[this.COLUMNS.M.index]);
         const urls = (parsed || []).map(p => p && p.url ? String(p.url).trim() : '').filter(Boolean);
         if (urls.length) {
-          const setRes = this.setPhotosCell(sheet, rowIndex, urls);
-          if (!setRes || !setRes.success) Logger.log('[updateAsset] setPhotosCell returned: ' + JSON.stringify(setRes));
+          const setRes = this.writePhotosAcrossColumns(sheet, rowIndex, urls, 8);
+          if (!setRes || !setRes.success) Logger.log('[updateAsset] writePhotosAcrossColumns returned: ' + JSON.stringify(setRes));
         }
       } catch (e) {
         Logger.log('[updateAsset] setPhotosCell failed: ' + e);
@@ -483,8 +535,8 @@ const SheetManager = {
       try {
         const urls = existingPhotos.map(p => (p && p.url) ? String(p.url).trim() : '').filter(Boolean);
         if (urls.length) {
-          const setRes = this.setPhotosCell(sheet, rowIndex, urls);
-          if (!setRes || !setRes.success) Logger.log('[addPhotoToAsset] setPhotosCell returned: ' + JSON.stringify(setRes));
+          const setRes = this.writePhotosAcrossColumns(sheet, rowIndex, urls, 8);
+          if (!setRes || !setRes.success) Logger.log('[addPhotoToAsset] writePhotosAcrossColumns returned: ' + JSON.stringify(setRes));
         }
       } catch (e) {
         Logger.log('[addPhotoToAsset] setPhotosCell failed: ' + e);

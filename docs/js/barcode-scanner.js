@@ -291,6 +291,27 @@ const camera = {
 
 
   /**
+   * 輔助：把遠端圖片下載並轉為 base64 (data URI 的 base64 部分)
+   */
+  fetchImageAsBase64: async function(url) {
+    if (!url) throw new Error('missing url');
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) throw new Error('fetch failed: ' + res.status);
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('FileReader failed'));
+      reader.onload = () => {
+        const dataUrl = reader.result;
+        const parts = String(dataUrl).split(',');
+        if (parts.length > 1) resolve(parts[1]);
+        else reject(new Error('invalid dataUrl'));
+      };
+      reader.readAsDataURL(blob);
+    });
+  },
+
+  /**
    * 確認照片
    */
   confirmPhoto: async function() {
@@ -300,17 +321,38 @@ const camera = {
       // 1) camera module
       if (window.camera && window.camera.capturedPhoto) {
         this.capturedPhoto = window.camera.capturedPhoto;
-        console.log('[confirmPhoto] recovered from window.camera.capturedPhoto, len=', this.capturedPhoto.length);
+        console.log('[confirmPhoto] recovered from window.camera.capturedPhoto, len=', this.capturedPhoto && this.capturedPhoto.length);
       }
 
-      // 2) ui.currentAsset.photos
-      if ((!this.capturedPhoto || this.capturedPhoto.length === 0) && ui && ui.currentAsset && ui.currentAsset.photos && ui.currentAsset.photos[0]) {
-        this.capturedPhoto = ui.currentAsset.photos[0];
-        console.log('[confirmPhoto] recovered from ui.currentAsset.photos[0], len=', this.capturedPhoto.length);
+      // 2) ui.currentAsset.photos - may be object {url:...} or string
+      if ((!this.capturedPhoto || (typeof this.capturedPhoto === 'string' && this.capturedPhoto.length === 0)) && ui && ui.currentAsset && ui.currentAsset.photos && ui.currentAsset.photos[0]) {
+        const first = ui.currentAsset.photos[0];
+        if (typeof first === 'object' && first.url) {
+          try {
+            this.capturedPhoto = await this.fetchImageAsBase64(first.url);
+            console.log('[confirmPhoto] fetched base64 from ui.currentAsset.photos[0].url, len=', this.capturedPhoto && this.capturedPhoto.length);
+          } catch (e) {
+            console.warn('[confirmPhoto] failed to fetch image from url fallback:', e);
+          }
+        } else if (typeof first === 'string') {
+          if (first.indexOf('data:') === 0) {
+            const parts = first.split(',');
+            if (parts.length > 1) this.capturedPhoto = parts[1];
+          } else if (first.indexOf('http') === 0) {
+            try {
+              this.capturedPhoto = await this.fetchImageAsBase64(first);
+            } catch (e) {
+              console.warn('[confirmPhoto] failed to fetch image from string URL fallback:', e);
+            }
+          } else {
+            this.capturedPhoto = first;
+          }
+          console.log('[confirmPhoto] recovered from ui.currentAsset.photos[0], type=', typeof first, 'len=', this.capturedPhoto && this.capturedPhoto.length);
+        }
       }
 
       // 3) preview <img> (data: URI)
-      if ((!this.capturedPhoto || this.capturedPhoto.length === 0)) {
+      if ((!this.capturedPhoto || (typeof this.capturedPhoto === 'string' && this.capturedPhoto.length === 0))) {
         const preview = document.getElementById('photoPreview');
         if (preview && preview.src && typeof preview.src === 'string' && preview.src.indexOf('data:') === 0) {
           const parts = preview.src.split(',');
@@ -324,6 +366,13 @@ const camera = {
 
     if (!this.capturedPhoto || !ui.currentAsset) {
       ui.showNotification('error', '錯誤', '缺少必需信息（請重新拍照或選擇照片）');
+      return;
+    }
+
+    // 驗證 capturedPhoto 類型 — 必須是 base64 字串
+    if (typeof this.capturedPhoto !== 'string') {
+      ui.showNotification('error', '上傳失敗', '取得的照片格式不支援（需 base64 或 data:URI），請重新拍照或選擇照片');
+      console.error('[confirmPhoto] capturedPhoto is not a string:', this.capturedPhoto);
       return;
     }
 

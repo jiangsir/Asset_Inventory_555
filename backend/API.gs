@@ -317,15 +317,15 @@ function handleFinishUpload(data) {
 
     const assembled = DriveManager.assembleUploadParts(uploadId);
     if (!assembled || !assembled.success) {
-      Logger.log('[handleFinishUpload] assemble failed: ' + (assembled && assembled.error));
-      return sendResponse({ success: false, error: assembled && assembled.error ? assembled.error : '組合失敗' }, 500);
+      Logger.log('[handleFinishUpload] assemble failed: ' + (assembled && assembled.error) + ' debug=' + JSON.stringify(assembled && assembled.debug));
+      return sendResponse({ success: false, error: assembled && assembled.error ? assembled.error : '組合失敗', debug: assembled && assembled.debug ? assembled.debug : null }, 500);
     }
 
     const base64 = assembled.data || '';
-    Logger.log('[handleFinishUpload] assembled length=' + (base64 ? base64.length : 0));
+    Logger.log('[handleFinishUpload] assembled length=' + (base64 ? base64.length : 0) + ' partCount=' + (assembled.partCount || 0));
 
     if (!base64 || base64.length < 10) {
-      return sendResponse({ success: false, error: 'assembled data is empty or too small' }, 400);
+      return sendResponse({ success: false, error: 'assembled data is empty or too small', debug: { partCount: assembled.partCount || 0 } }, 400);
     }
 
     const result = DriveManager.uploadPhoto(code, base64, photoName);

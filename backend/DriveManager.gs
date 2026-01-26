@@ -164,19 +164,25 @@ const DriveManager = {
       const folder = this.getTempFolder();
       const files = folder.getFiles();
       const parts = [];
+      const otherFiles = [];
       while (files.hasNext()) {
         const f = files.next();
         const n = f.getName();
         if (n.indexOf(uploadId + '_part_') === 0) {
           const idx = parseInt(n.split('_part_')[1], 10);
-          parts.push({ idx: idx, content: f.getBlob().getDataAsString() });
+          parts.push({ idx: idx, content: f.getBlob().getDataAsString(), name: n });
+        } else {
+          if (otherFiles.length < 20) otherFiles.push({ name: n, size: f.getSize() });
         }
       }
 
-      if (!parts.length) return { success: false, error: 'no parts found' };
+      if (!parts.length) {
+        return { success: false, error: 'no parts found', debug: { matchingParts: 0, sampleTempFiles: otherFiles.slice(0,10) } };
+      }
+
       parts.sort((a,b) => a.idx - b.idx);
       const assembled = parts.map(p => p.content).join('');
-      return { success: true, data: assembled };
+      return { success: true, data: assembled, partCount: parts.length };
     } catch (err) {
       Logger.log('assembleUploadParts error: ' + err);
       return { success: false, error: err.toString() };
