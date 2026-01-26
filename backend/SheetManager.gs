@@ -295,6 +295,56 @@ const SheetManager = {
   },
 
   /**
+   * 將 URL 列表寫入單一 M 欄格並建立可點擊的超連結（使用 RichText）
+   * 若 RichText 不可用或失敗，會回退為純文字 URL 列表
+   */
+  setPhotosCell: function(sheet, rowIndex, urls) {
+    try {
+      if (!sheet || !rowIndex) return { success: false, error: 'missing sheet or rowIndex' };
+      const cell = sheet.getRange(rowIndex, this.COLUMNS.M.index + 1);
+
+      if (!urls || !urls.length) {
+        cell.clearContent();
+        return { success: true };
+      }
+
+      const display = urls.join('\n');
+
+      // 嘗試建立 RichText 並為每個 URL 建立連結範圍
+      try {
+        const builder = SpreadsheetApp.newRichTextValue();
+        builder.setText(display);
+
+        let offset = 0;
+        for (let i = 0; i < urls.length; i++) {
+          const u = String(urls[i]).trim();
+          if (!u) continue;
+          const start = offset;
+          const end = offset + u.length;
+          // 設定該文字範圍的超連結
+          try { builder.setLinkUrl(start, end, u); } catch(e) { /* ignore individual link errors */ }
+          offset = end + 1; // account for '\n'
+        }
+
+        const rich = builder.build();
+        cell.setRichTextValue(rich);
+        cell.setWrap(true);
+        return { success: true };
+      } catch (e) {
+        // 回退：寫入純文字（仍可點擊網址，如果 Sheets 自動辨識）
+        Logger.log('[setPhotosCell] RichText failed, falling back to plain text: ' + e);
+        cell.setValue(display);
+        cell.setWrap(true);
+        return { success: false, error: e && e.toString ? e.toString() : String(e) };
+      }
+
+    } catch (err) {
+      Logger.log('[setPhotosCell] error: ' + err);
+      return { success: false, error: err && err.toString ? err.toString() : String(err) };
+    }
+  },
+
+  /**
    * 更新財產數據
    */
   updateAsset: function(updateData) {
@@ -342,6 +392,18 @@ const SheetManager = {
       // 寫入 Spreadsheet（指定 columns 長度為 requiredCols，避免短列造成錯誤）
       const range = sheet.getRange(rowIndex, 1, 1, requiredCols);
       range.setValues([row.slice(0, requiredCols)]);
+
+      // 盡量把 M 欄設為富文本超連結（非阻塞）
+      try {
+        const parsed = this.parsePhotos(row[this.COLUMNS.M.index]);
+        const urls = (parsed || []).map(p => p && p.url ? String(p.url).trim() : '').filter(Boolean);
+        if (urls.length) {
+          const setRes = this.setPhotosCell(sheet, rowIndex, urls);
+          if (!setRes || !setRes.success) Logger.log('[updateAsset] setPhotosCell returned: ' + JSON.stringify(setRes));
+        }
+      } catch (e) {
+        Logger.log('[updateAsset] setPhotosCell failed: ' + e);
+      }
 
       // 重新讀取並回傳更新後的資產資料
       const updatedAssetResult = this.getAssetByCode(updateData.code);
@@ -416,6 +478,17 @@ const SheetManager = {
 
       const range = sheet.getRange(rowIndex, 1, 1, requiredCols);
       range.setValues([row.slice(0, requiredCols)]);
+
+      // 把 M 欄設為富文本超連結（若可行）
+      try {
+        const urls = existingPhotos.map(p => (p && p.url) ? String(p.url).trim() : '').filter(Boolean);
+        if (urls.length) {
+          const setRes = this.setPhotosCell(sheet, rowIndex, urls);
+          if (!setRes || !setRes.success) Logger.log('[addPhotoToAsset] setPhotosCell returned: ' + JSON.stringify(setRes));
+        }
+      } catch (e) {
+        Logger.log('[addPhotoToAsset] setPhotosCell failed: ' + e);
+      }
 
       return { success: true, asset: this.getAssetByCode(code).asset };
 
