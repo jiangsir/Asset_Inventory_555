@@ -227,13 +227,29 @@ function handleUpdateAsset(data) {
  * 上傳照片
  */
 function handleUploadPhoto(data) {
-  if (!data.code || !data.photoBase64) {
-    return sendResponse({success: false, error: '缺少必需參數'}, 400);
+  // 更詳細的驗證與日誌，並接受 data URL 或純 base64
+  const code = data && data.code ? String(data.code).trim() : null;
+  let photoBase64 = data && data.photoBase64 ? String(data.photoBase64) : null;
+  const photoName = data && data.photoName ? String(data.photoName) : null;
+
+  Logger.log('[handleUploadPhoto] incoming — code=' + (code ? 'YES' : 'NO') + ', photoBase64 length=' + (photoBase64 ? photoBase64.length : 0));
+
+  if (!code) {
+    return sendResponse({success: false, error: '缺少財產編號 (code)'}, 400);
   }
-  
+  if (!photoBase64) {
+    return sendResponse({success: false, error: '缺少照片資料 (photoBase64) 或 資料已被截斷'}, 400);
+  }
+
+  // 支援 data:<mime>;base64,xxxx 的情況
+  if (photoBase64.indexOf('data:') === 0) {
+    const parts = photoBase64.split(',');
+    if (parts.length > 1) photoBase64 = parts[1];
+  }
+
   try {
-    const result = DriveManager.uploadPhoto(data.code, data.photoBase64, data.photoName);
-    
+    const result = DriveManager.uploadPhoto(code, photoBase64, photoName);
+
     if (result.success) {
       return sendResponse({
         success: true,
@@ -241,12 +257,14 @@ function handleUploadPhoto(data) {
         photo: result.photo
       });
     } else {
+      Logger.log('[handleUploadPhoto] DriveManager.uploadPhoto failed: ' + result.error);
       return sendResponse({
         success: false,
         error: result.error || '上傳失敗'
       }, 400);
     }
   } catch(error) {
+    Logger.log('[handleUploadPhoto] exception: ' + error);
     return sendResponse({success: false, error: error.toString()}, 500);
   }
 }

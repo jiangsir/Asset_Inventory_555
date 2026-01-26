@@ -61,6 +61,9 @@ const sheetApi = {
           if (data.photoName) form.append('photoName', data.photoName);
           options.body = form;
           // 刪除 headers，讓瀏覽器自動設定 boundary
+          try {
+            console.log(`[API request] sending photoBase64 length=${data.photoBase64.length} chars (~${Math.round((data.photoBase64.length*3/4)/1024)} KB)`);
+          } catch (e) { /* ignore */ }
         } else {
           // 小型 POST：用 payload 欄位的 urlencoded 字串（避免 preflight）
           options.headers = {
