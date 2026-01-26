@@ -233,19 +233,64 @@ const SheetManager = {
   },
 
   /**
-   * 解析照片數據（JSON 格式）
+   * 解析照片數據（向後相容：支援 JSON array 與純 URL 列表）
+   * 回傳格式：array of { id?, name?, url, size?, mimeType?, uploadDate? }
    */
   parsePhotos: function(photoData) {
     if (!photoData) return [];
-    
+
     try {
-      if (typeof photoData === 'string') {
-        return JSON.parse(photoData);
+      // 已存成 JSON（舊形式或結構化 metadata）
+      if (typeof photoData === 'string' && photoData.trim().startsWith('[')) {
+        const parsed = JSON.parse(photoData);
+        // 若是 array of strings（舊遺留），轉為 objects
+        if (Array.isArray(parsed)) {
+          return parsed.map(p => {
+            if (typeof p === 'string') return { url: p };
+            return p;
+          });
+        }
+        return [];
       }
-      return Array.isArray(photoData) ? photoData : [];
+
+      // 如果是陳列的 URL（新形式），允許以換行、逗號或分號分隔
+      if (typeof photoData === 'string') {
+        const parts = photoData.split(/\r?\n|,|;/).map(s => s.trim()).filter(Boolean);
+        return parts.map(u => ({ url: u }));
+      }
+
+      // 已經是陣列（object 或 string）
+      if (Array.isArray(photoData)) {
+        return photoData.map(p => (typeof p === 'string' ? { url: p } : p));
+      }
+
+      return [];
     } catch(e) {
       Logger.log('照片解析錯誤: ' + e);
       return [];
+    }
+  },
+
+  /**
+   * 把 photos 資料序列化為寫入 Spreadsheet 的字串（新格式：換行分隔的 URL）
+   */
+  serializePhotosForSheet: function(photos) {
+    try {
+      if (!photos) return '';
+      if (!Array.isArray(photos)) return String(photos).trim();
+
+      // photos 可以是 array of objects 或 array of urls
+      const urls = photos.map(p => {
+        if (!p) return '';
+        if (typeof p === 'string') return p.trim();
+        return (p.url || p.webViewLink || p.name || '').toString().trim();
+      }).filter(Boolean);
+
+      // 使用換行符號存放多張照片（在 Spreadsheet 中可直接點開/預覽）
+      return urls.join('\n');
+    } catch (e) {
+      Logger.log('[serializePhotosForSheet] error: ' + e);
+      return '';
     }
   },
 
@@ -291,7 +336,7 @@ const SheetManager = {
       row[this.COLUMNS.J.index] = updateData.location || '';
       row[this.COLUMNS.K.index] = updateData.remark || '';
       row[this.COLUMNS.L.index] = updateData.scrappable || '';
-      row[this.COLUMNS.M.index] = JSON.stringify(updateData.photos || []);
+      row[this.COLUMNS.M.index] = this.serializePhotosForSheet(updateData.photos || []);
       row[this.COLUMNS.N.index] = new Date();
 
       // 寫入 Spreadsheet（指定 columns 長度為 requiredCols，避免短列造成錯誤）
@@ -365,7 +410,8 @@ const SheetManager = {
         }
       }
 
-      row[this.COLUMNS.M.index] = JSON.stringify(existingPhotos);
+      // 寫入 M 欄：使用簡單的 URL 換行列表以利在 Spreadsheet 中快速預覽/點擊
+      row[this.COLUMNS.M.index] = this.serializePhotosForSheet(existingPhotos);
       row[this.COLUMNS.N.index] = new Date();
 
       const range = sheet.getRange(rowIndex, 1, 1, requiredCols);
