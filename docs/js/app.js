@@ -231,6 +231,23 @@ const app = {
   uploadPhoto: async function(photoBase64, fileName = null, onProgress = null) {
     ui.showLoading('正在上傳照片...');
 
+    // 防禦式檢查並輸出日誌；如果沒有傳入，嘗試從 camera 或 ui.currentAsset 補救
+    console.log('[app.uploadPhoto] received photoBase64?', !!photoBase64, 'length=', photoBase64 ? photoBase64.length : 0, 'assetCode=', ui && ui.currentAsset ? ui.currentAsset.code : 'NO_ASSET');
+    if (!photoBase64) {
+      // 嘗試 fallback
+      const fallback = (window.camera && window.camera.capturedPhoto) || (ui && ui.currentAsset && ui.currentAsset.photos && ui.currentAsset.photos[0]) || null;
+      console.log('[app.uploadPhoto] fallback detected?', !!fallback, fallback ? fallback.length : 0);
+      if (fallback) {
+        photoBase64 = fallback;
+      } else {
+        const msg = '本地未取得照片 (photoBase64 為空)。請重新拍照或從相簿選取，再按確認。';
+        console.error('[app.uploadPhoto] ' + msg);
+        ui.showNotification('error', '上傳失敗', msg);
+        ui.hideLoading();
+        throw new Error('missing photoBase64 in app.uploadPhoto');
+      }
+    }
+
     try {
       const result = await sheetApi.uploadPhoto({
         code: ui.currentAsset.code,

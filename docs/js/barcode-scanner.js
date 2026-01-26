@@ -270,6 +270,10 @@ const camera = {
     ui.showLoading('正在上傳照片...');
 
     try {
+      // 先 log 以便排查 capturedPhoto 在呼叫時是否存在或已被覆蓋
+      console.log('[confirmPhoto] capturedPhoto present?', !!this.capturedPhoto, 'length=', this.capturedPhoto ? this.capturedPhoto.length : 0);
+      console.log('[confirmPhoto] ui.currentAsset.code=', ui && ui.currentAsset ? ui.currentAsset.code : 'NO_ASSET');
+
       // 使用 app.uploadPhoto（支援 progress callback 與分片上傳）
       const result = await app.uploadPhoto(this.capturedPhoto, 'photo.jpg', (percent, idx, total) => {
         console.log(`upload progress: ${percent}% (${idx+1}/${total})`);

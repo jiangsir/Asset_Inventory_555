@@ -157,8 +157,13 @@ const sheetApi = {
   uploadPhoto: async function(photoData, onProgress = null) {
     const CHUNK_SIZE = 100 * 1024; // 100k chars per chunk (~75KB binary)
 
-    if (!photoData || !photoData.photoBase64) {
-      throw new Error('missing photoBase64');
+    // 更友善的錯誤與診斷資訊
+    if (!photoData) {
+      throw new Error('missing photoData — caller must pass {code, photoBase64}');
+    }
+    if (!photoData.photoBase64) {
+      const codeInfo = photoData.code ? ('code=' + photoData.code) : 'no-code';
+      throw new Error('missing photoBase64 (' + codeInfo + '). Ensure the caller passes the base64 string or that camera.read completed.');
     }
 
     const b64 = photoData.photoBase64;
