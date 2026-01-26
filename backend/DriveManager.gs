@@ -261,6 +261,45 @@ const DriveManager = {
   },
 
   /**
+   * 獲取資產資料夾中最新（按修改時間）的圖片
+   * @param {string} assetCode
+   * @returns {object} {success: bool, photo: {id,name,url,size,mimeType,uploadDate}} 或 {success:false, error: string}
+   */
+  getLatestPhoto: function(assetCode) {
+    try {
+      const assetFolder = this.getAssetFolder(assetCode);
+      const files = assetFolder.getFiles();
+      let latest = null;
+
+      while (files.hasNext()) {
+        const f = files.next();
+        if (!f.getMimeType().startsWith('image/')) continue;
+        const t = f.getLastUpdated() ? f.getLastUpdated().getTime() : 0;
+        if (!latest || t > latest.t) {
+          latest = { f: f, t: t };
+        }
+      }
+
+      if (!latest) return { success: false, error: 'no photos found' };
+      const file = latest.f;
+      return {
+        success: true,
+        photo: {
+          id: file.getId(),
+          name: file.getName(),
+          url: file.getUrl(),
+          size: file.getSize(),
+          mimeType: file.getMimeType(),
+          uploadDate: file.getLastUpdated() ? file.getLastUpdated().toISOString() : (new Date()).toISOString()
+        }
+      };
+    } catch (err) {
+      Logger.log('[getLatestPhoto] error: ' + err);
+      return { success: false, error: err && err.toString ? err.toString() : String(err) };
+    }
+  },
+
+  /**
    * 批量刪除資產的所有照片
    * @param {string} assetCode - 財產編號
    * @returns {object} {success: bool, deletedCount: number}

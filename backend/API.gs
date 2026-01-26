@@ -82,6 +82,9 @@ function doPost(e) {
       case 'finishUpload':
         result = handleFinishUpload(data);
         break;
+      case 'repairAttach':
+        result = handleRepairAttach(data);
+        break;
       case 'deletePhoto':
         result = handleDeletePhoto(data);
         break;
@@ -327,17 +330,89 @@ function handleFinishUpload(data) {
 
     const result = DriveManager.uploadPhoto(code, base64, photoName);
 
-    // 清理零散檔案
+    // 嘗試清理零散檔案（非阻塞）
     try { DriveManager.cleanupUploadParts(uploadId); } catch(e){ Logger.log('[handleFinishUpload] cleanup failed: ' + e); }
 
-    if (result.success) {
-      return sendResponse({ success: true, photo: result.photo });
+    if (!result || !result.success) {
+      Logger.log('[handleFinishUpload] uploadPhoto returned error: ' + (result && result.error));
+      return sendResponse({ success: false, error: result && result.error ? result.error : '上傳失敗' }, 500);
     }
 
-    Logger.log('[handleFinishUpload] uploadPhoto returned error: ' + result.error);
-    return sendResponse({ success: false, error: result.error || '上傳失敗' }, 500);
+    // Drive 上傳成功——嘗試把照片 metadata 寫回 Spreadsheet（重試機制）
+    const photo = result.photo;
+    let attachResult = null;
+    const maxAttempts = 3;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        Logger.log('[handleFinishUpload] attempting to attach photo to sheet — attempt=' + attempt + ', code=' + code + ', fileId=' + (photo && photo.id));
+        attachResult = SheetManager.addPhotoToAsset(code, photo);
+        if (attachResult && attachResult.success) {
+          Logger.log('[handleFinishUpload] attached to sheet successfully');
+          return sendResponse({ success: true, photo: photo, asset: attachResult.asset });
+        }
+
+        Logger.log('[handleFinishUpload] attach attempt failed: ' + (attachResult && attachResult.error));
+      } catch (e) {
+        Logger.log('[handleFinishUpload] attach threw: ' + e);
+        attachResult = { success: false, error: e && e.toString ? e.toString() : String(e) };
+      }
+
+      // 指數回退（短暫）
+      Utilities.sleep(250 * attempt);
+    }
+
+    // 如果到這裡仍失敗，記錄到待修復表並回傳部分成功（Drive 已上傳）
+    try {
+      const logRes = SheetManager.logPendingAttachment(code, photo, attachResult && attachResult.error ? attachResult.error : 'unknown', maxAttempts);
+      Logger.log('[handleFinishUpload] logged pending attachment: ' + JSON.stringify(logRes));
+      return sendResponse({ success: true, photo: photo, warning: 'sheet_attach_failed', repair: logRes });
+    } catch (logErr) {
+      Logger.log('[handleFinishUpload] failed to log pending attachment: ' + logErr);
+      return sendResponse({ success: true, photo: photo, warning: 'sheet_attach_failed_and_log_failed', error: (attachResult && attachResult.error) || String(logErr) });
+    }
+
   } catch (err) {
     Logger.log('[handleFinishUpload] exception: ' + err);
+    return sendResponse({ success: false, error: err.toString() }, 500);
+  }
+}
+
+
+/**
+ * 嘗試把指定 Drive 檔案（或該資產的最新檔案）附加到資產的 Spreadsheet
+ * 接收：{ code, fileId? }
+ */
+function handleRepairAttach(data) {
+  if (!data || !data.code) return sendResponse({ success: false, error: '缺少 code' }, 400);
+
+  try {
+    const code = String(data.code);
+    let photoInfo = null;
+
+    if (data.fileId) {
+      // 以指定 fileId 為準
+      try {
+        const f = DriveApp.getFileById(String(data.fileId));
+        photoInfo = { id: f.getId(), name: f.getName(), url: f.getUrl(), size: f.getSize(), mimeType: f.getMimeType(), uploadDate: f.getLastUpdated() ? f.getLastUpdated().toISOString() : (new Date()).toISOString() };
+      } catch (e) {
+        return sendResponse({ success: false, error: 'invalid fileId: ' + e.toString() }, 400);
+      }
+    } else {
+      // 取該資產最新的照片
+      const latest = DriveManager.getLatestPhoto(code);
+      if (!latest || !latest.success) return sendResponse({ success: false, error: latest && latest.error ? latest.error : 'no photo found' }, 404);
+      photoInfo = latest.photo;
+    }
+
+    const attachRes = SheetManager.addPhotoToAsset(code, photoInfo);
+    if (attachRes && attachRes.success) return sendResponse({ success: true, asset: attachRes.asset });
+
+    // 若附加失敗，記錄並回傳錯誤
+    const logRes = SheetManager.logPendingAttachment(code, photoInfo, attachRes && attachRes.error ? attachRes.error : 'attach_failed', 0);
+    return sendResponse({ success: false, error: attachRes && attachRes.error ? attachRes.error : 'attach_failed', repair: logRes }, 500);
+  } catch (err) {
+    Logger.log('[handleRepairAttach] exception: ' + err);
     return sendResponse({ success: false, error: err.toString() }, 500);
   }
 }

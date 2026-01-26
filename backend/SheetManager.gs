@@ -316,6 +316,91 @@ const SheetManager = {
   },
 
   /**
+   * 將單張 Drive 照片的 metadata 附加到資產的 M 欄（photos JSON）
+   * - id,name,url,size,mimeType,uploadDate
+   * - 保持去重（以 id 為準）
+   */
+  addPhotoToAsset: function(code, photoInfo) {
+    try {
+      if (!code) return { success: false, error: 'missing code' };
+      if (!photoInfo || !photoInfo.id) return { success: false, error: 'missing photoInfo or id' };
+
+      const existing = this.getAssetByCode(code);
+      if (!existing.asset) return { success: false, error: 'asset not found' };
+
+      const targetSheetName = existing.sheetName || this.getSheetName();
+      const ss = this.getSpreadsheet();
+      const sheet = ss.getSheetByName(targetSheetName);
+      const rowIndex = existing.asset.rowIndex; // 1-based
+
+      const allData = this.getSheetData(sheet);
+      if (!allData || rowIndex < 1 || rowIndex > allData.length) {
+        return { success: false, error: 'row out of range' };
+      }
+
+      const requiredCols = Math.max(...Object.values(this.COLUMNS).map(c => c.index)) + 1;
+      let row = allData[rowIndex - 1] || [];
+      if (row.length < requiredCols) for (let i = row.length; i < requiredCols; i++) row[i] = '';
+
+      const existingPhotos = this.parsePhotos(row[this.COLUMNS.M.index]);
+
+      // 去重
+      const exists = existingPhotos.some(p => String(p.id) === String(photoInfo.id));
+      if (!exists) {
+        existingPhotos.push({
+          id: photoInfo.id,
+          name: photoInfo.name || '',
+          url: photoInfo.url || photoInfo.webViewLink || '',
+          size: photoInfo.size || 0,
+          mimeType: photoInfo.mimeType || '',
+          uploadDate: photoInfo.uploadDate || (new Date()).toISOString()
+        });
+      } else {
+        // 若已存在則更新內容
+        for (let i = 0; i < existingPhotos.length; i++) {
+          if (String(existingPhotos[i].id) === String(photoInfo.id)) {
+            existingPhotos[i] = Object.assign({}, existingPhotos[i], photoInfo);
+            break;
+          }
+        }
+      }
+
+      row[this.COLUMNS.M.index] = JSON.stringify(existingPhotos);
+      row[this.COLUMNS.N.index] = new Date();
+
+      const range = sheet.getRange(rowIndex, 1, 1, requiredCols);
+      range.setValues([row.slice(0, requiredCols)]);
+
+      return { success: true, asset: this.getAssetByCode(code).asset };
+
+    } catch (err) {
+      Logger.log('[addPhotoToAsset] error: ' + err);
+      return { success: false, error: err && err.toString ? err.toString() : String(err) };
+    }
+  },
+
+  /**
+   * 將無法附加到表格的 Drive 照片記錄到 PENDING_ATTACHMENTS 以便後續修復
+   */
+  logPendingAttachment: function(code, photoInfo, errorMsg, attempts) {
+    try {
+      const ss = this.getSpreadsheet();
+      let sheet = ss.getSheetByName('PENDING_ATTACHMENTS');
+      if (!sheet) {
+        sheet = ss.insertSheet('PENDING_ATTACHMENTS');
+        sheet.appendRow(['timestamp','code','fileId','photoName','error','attempts']);
+      }
+
+      const row = [new Date(), code || '', (photoInfo && photoInfo.id) || '', (photoInfo && photoInfo.name) || '', String(errorMsg || ''), attempts || 0];
+      sheet.appendRow(row);
+      return { success: true, row: sheet.getLastRow() };
+    } catch (e) {
+      Logger.log('[logPendingAttachment] error: ' + e);
+      return { success: false, error: e && e.toString ? e.toString() : String(e) };
+    }
+  },
+
+  /**
    * 遷移舊數據到新財產
    * 用於"註解跟比對"功能擴展
    */

@@ -240,6 +240,15 @@ const sheetApi = {
   },
 
   /**
+   * 嘗試把 Drive 檔案附加到資產（server-side repair helper）
+   */
+  repairAttach: async function(code, fileId = null) {
+    const data = { code };
+    if (fileId) data.fileId = fileId;
+    return this.request('repairAttach', 'POST', data);
+  },
+
+  /**
    * 刪除照片
    */
   deletePhoto: async function(photoId) {
