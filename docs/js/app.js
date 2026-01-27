@@ -112,16 +112,42 @@ const app = {
    * 綁定全局事件監聽器
    */
   bindEventListeners: function() {
-    // 掃描輸入框
+    // 掃描輸入框 — 使用 keydown (更可靠)，並加入 form-submit fallback
     const codeInput = document.getElementById('assetCodeInput');
-    codeInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
+
+    // 主要：keydown 監聽 Enter（支援所有字元，包括英數混合）
+    codeInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.code === 'NumpadEnter') {
         const code = codeInput.value.trim();
         if (code) {
+          e.preventDefault();
           this.queryAsset(code);
         }
       }
     });
+
+    // 容錯：監聽 paste（某些掃描器會貼上並非觸發鍵盤事件）
+    codeInput.addEventListener('paste', (ev) => {
+      setTimeout(() => {
+        const v = codeInput.value && codeInput.value.trim();
+        if (v && v.length > 3) {
+          // 若 paste 後自動包含換行或掃描結果，嘗試自動查詢
+          if (/\n/.test(codeInput.value) || /\r/.test(codeInput.value)) {
+            this.queryAsset(v.replace(/\s+/g, ''));
+          }
+        }
+      }, 50);
+    });
+
+    // 兼容：把輸入包成隱藏的 form 並監聽 submit（可 programmatic submit）
+    const searchForm = document.getElementById('searchForm');
+    if (searchForm) {
+      searchForm.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        const code = codeInput.value.trim();
+        if (code) this.queryAsset(code);
+      });
+    }
 
     // 搜索建議
     codeInput.addEventListener('input', (e) => {
