@@ -179,6 +179,43 @@ const app = {
   },
 
   /**
+   * Helper: 確保外部模組存在並呼叫其 init
+   */
+  _ensureAndInit: function(name, timeoutMs = 1000) {
+    return new Promise((resolve) => {
+      const start = Date.now();
+      const tryInit = () => {
+        try {
+          const obj = window[name];
+          if (obj && typeof obj.init === 'function') {
+            try {
+              const res = obj.init();
+              if (res && typeof res.then === 'function') {
+                res.then(() => resolve(true)).catch(() => resolve(false));
+              } else {
+                resolve(true);
+              }
+              return;
+            } catch (e) {
+              console.warn(`[ensureAndInit] ${name}.init threw:`, e);
+              resolve(false);
+              return;
+            }
+          }
+        } catch (e) { /* ignore */ }
+
+        if (Date.now() - start > timeoutMs) {
+          console.debug(`[ensureAndInit] timeout waiting for ${name}`);
+          resolve(false);
+          return;
+        }
+        setTimeout(tryInit, 80);
+      };
+      tryInit();
+    });
+  },
+
+  /**
    * 查詢財產
    */
   queryAsset: async function(code) {
