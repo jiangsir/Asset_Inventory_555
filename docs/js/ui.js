@@ -469,6 +469,28 @@ const ui = {
   },
 
   /**
+   * 上傳進度回饋（會暫時更新右上同步按鈕文字以顯示百分比）
+   */
+  showUploadProgress: function(percent) {
+    try {
+      const btn = document.getElementById('syncBtn');
+      if (!btn) return;
+      btn.dataset.orig = btn.dataset.orig || btn.textContent;
+      btn.textContent = `⟳ ${percent}%`;
+      btn.setAttribute('aria-busy', 'true');
+    } catch (e) { console.debug('showUploadProgress error', e); }
+  },
+
+  clearUploadProgress: function() {
+    try {
+      const btn = document.getElementById('syncBtn');
+      if (!btn) return;
+      if (btn.dataset.orig) btn.textContent = btn.dataset.orig;
+      btn.removeAttribute('aria-busy');
+    } catch (e) { console.debug('clearUploadProgress error', e); }
+  },
+
+  /**
    * 格式化日期
    */
   formatDate: function(date) {

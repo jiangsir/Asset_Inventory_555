@@ -237,71 +237,132 @@ const app = {
   /**
    * 上傳照片
    */
+  // ======== Image helpers ========
+  resizeDataUrl: async function(dataUrl, maxSide = 1600, quality = 0.75) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const ratio = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const cw = Math.round(img.width * ratio);
+        const ch = Math.round(img.height * ratio);
+        const c = document.createElement('canvas');
+        c.width = cw; c.height = ch;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0, cw, ch);
+        const out = c.toDataURL('image/jpeg', quality);
+        resolve(out);
+      };
+      img.onerror = (e) => reject(e);
+      img.src = dataUrl;
+    });
+  },
+
+  estimateBytesFromBase64: function(b64) {
+    if (!b64) return 0;
+    const withoutPrefix = b64.indexOf('base64,')>0 ? b64.split('base64,')[1] : b64;
+    const padding = (withoutPrefix.endsWith('==') ? 2 : (withoutPrefix.endsWith('=') ? 1 : 0));
+    return Math.ceil((withoutPrefix.length * 3)/4) - padding;
+  },
+
+  // ======== Upload with thumbnail-first + parallel chunking ========
   uploadPhoto: async function(photoBase64, fileName = null, onProgress = null) {
     ui.showLoading('正在上傳照片...');
 
-    // 防禦式檢查並輸出日誌；如果沒有傳入，嘗試從 camera 或 ui.currentAsset 補救
+    // 防禦式檢查
     console.log('[app.uploadPhoto] received photoBase64?', !!photoBase64, 'length=', photoBase64 ? (photoBase64.length || 'undefined') : 0, 'assetCode=', ui && ui.currentAsset ? ui.currentAsset.code : 'NO_ASSET');
     if (!photoBase64) {
-      // 嘗試 fallback
       const fallback = (window.camera && window.camera.capturedPhoto) || (ui && ui.currentAsset && ui.currentAsset.photos && ui.currentAsset.photos[0]) || null;
-      console.log('[app.uploadPhoto] fallback detected?', !!fallback, fallback ? (fallback.length || 'undefined') : 0);
-      if (fallback) {
-        photoBase64 = fallback;
-      } else {
-        const msg = '本地未取得照片 (photoBase64 為空)。請重新拍照或從相簿選取，再按確認。';
-        console.error('[app.uploadPhoto] ' + msg);
-        ui.showNotification('error', '上傳失敗', msg);
-        ui.hideLoading();
-        throw new Error('missing photoBase64 in app.uploadPhoto');
-      }
+      if (fallback) photoBase64 = fallback;
+      else { ui.showNotification('error','上傳失敗','本地未取得照片 (請重新拍照或選擇相片)'); ui.hideLoading(); throw new Error('missing photoBase64'); }
     }
 
-    // 如果傳入的是 object（例如 {url:...}），嘗試把遠端圖抓下來轉 base64
+    // 若傳入的是物件，嘗試取出 base64
     if (typeof photoBase64 === 'object' && photoBase64 !== null) {
-      if (photoBase64.url) {
-        try {
-          console.log('[app.uploadPhoto] resolving photo object.url -> base64');
-          const b64 = await (window.barcodeScanner && window.barcodeScanner.fetchImageAsBase64 ? window.barcodeScanner.fetchImageAsBase64(photoBase64.url) : null);
-          if (b64) photoBase64 = b64;
-        } catch (e) {
-          console.warn('[app.uploadPhoto] failed to fetch object.url as base64', e);
-        }
+      if (photoBase64.url && window.barcodeScanner && window.barcodeScanner.fetchImageAsBase64) {
+        try { photoBase64 = await window.barcodeScanner.fetchImageAsBase64(photoBase64.url); } catch(e){/* ignore */}
       } else if (photoBase64.photoBase64) {
         photoBase64 = photoBase64.photoBase64;
       }
     }
 
-    // 最終型態檢查：必須是字串且有長度
     if (typeof photoBase64 !== 'string' || !Number.isFinite(photoBase64.length)) {
-      const msg = 'invalid photo data (expected base64 string)';
-      console.error('[app.uploadPhoto] ' + msg, photoBase64);
-      ui.showNotification('error', '上傳失敗', msg);
-      ui.hideLoading();
-      throw new Error(msg);
+      ui.showNotification('error','上傳失敗','照片格式不正確'); ui.hideLoading(); throw new Error('invalid photo data');
     }
 
     try {
-      const result = await sheetApi.uploadPhoto({
-        code: ui.currentAsset.code,
-        photoBase64: photoBase64,
-        photoName: fileName
-      }, onProgress);
+      const code = ui.currentAsset && ui.currentAsset.code;
+
+      // 1) 產生縮圖 (快速顯示)，先上傳並 attach 到資產
+      try {
+        const dataUrl = photoBase64.indexOf('data:') === 0 ? photoBase64 : ('data:image/jpeg;base64,' + photoBase64);
+        const thumb = await this.resizeDataUrl(dataUrl, 400, 0.7);
+        const thumbB64 = thumb.split(',')[1];
+
+        // 上傳縮圖（小檔走單次請求），並立即 attach 以便在 sheet 顯示
+        const thumbRes = await sheetApi.uploadPhoto({ code, photoBase64: thumbB64, photoName: (fileName||'photo') + '_thumb.jpg', meta: { isThumbnail: true } });
+        if (thumbRes && thumbRes.success && thumbRes.photo && thumbRes.photo.id) {
+          // 嘗試把縮圖附加到 asset（server-side attach helper）
+          await sheetApi.repairAttach(code, thumbRes.photo.id);
+          // 立即在 UI 顯示（optimistic update）
+          ui.currentAsset = ui.currentAsset || {};
+          ui.currentAsset.photos = ui.currentAsset.photos || [];
+          ui.currentAsset.photos.unshift({ id: thumbRes.photo.id, url: thumbRes.photo.url, name: thumbRes.photo.name });
+          ui.displayPhotos(ui.currentAsset.photos);
+        }
+      } catch (thumbErr) {
+        console.warn('thumbnail upload failed', thumbErr);
+      }
+
+      // 2) 如果原檔很大，先嘗試壓縮成合理大小再上傳 full image
+      const estimated = this.estimateBytesFromBase64(photoBase64);
+      if (estimated > (2.4 * 1024 * 1024)) {
+        try {
+          const dataUrl = photoBase64.indexOf('data:') === 0 ? photoBase64 : ('data:image/jpeg;base64,' + photoBase64);
+          const resized = await this.resizeDataUrl(dataUrl, 1600, 0.78);
+          photoBase64 = resized.split(',')[1];
+        } catch (e) {
+          console.warn('full-image resize failed, uploading original', e);
+        }
+      }
+
+      // 3) 以並行分片上傳 full image（uploadPhoto 內會選擇 chunked 路徑）
+      const result = await sheetApi.uploadPhoto({ code, photoBase64, photoName: fileName, meta: { originalSize: estimated || null } }, (pct, uploadedParts, totalParts) => {
+        // progress callback
+        try { ui.showUploadProgress(pct); } catch(e){ console.log('progress', pct); }
+        if (typeof onProgress === 'function') onProgress(pct, uploadedParts, totalParts);
+      });
 
       if (result && result.success) {
         ui.showNotification('success', '上傳成功', '照片已保存');
+        // 完成後用後端的 asset 更新 UI（保守刷新）
+        if (result.asset) {
+          ui.currentAsset = result.asset;
+          ui.displayPhotos(ui.currentAsset.photos || []);
+        } else {
+          // 否則嘗試拉一遍最新 asset
+          try { const fresh = await sheetApi.getAsset(code); if (fresh && fresh.success) { ui.currentAsset = fresh.asset; ui.displayPhotos(fresh.asset.photos || []); } } catch(e){}
+        }
         return result;
       } else {
         ui.showNotification('error', '上傳失敗', result && result.error || '無法上傳照片');
         return result;
       }
+
     } catch (error) {
       console.error('上傳錯誤:', error);
-      ui.showNotification('error', '錯誤', error.message);
+      ui.showNotification('error', '錯誤', error.message || String(error));
       return null;
     } finally {
-      ui.hideLoading();
+      ui.hideLoading(); ui.clearUploadProgress();
     }
+  },
+
+  // 簡易上傳效能測試（Console 可呼叫）
+  uploadPerfTest: async function(dataUrl, opts = {}) {
+    const start = Date.now();
+    const res = await this.uploadPhoto(dataUrl.indexOf('data:')===0?dataUrl.split(',')[1]:dataUrl, opts.fileName || 'perf.jpg', (pct)=>console.log('pct',pct));
+    console.log('uploadPerfTest result', res, 'took', (Date.now()-start)/1000, 's');
+    return res;
   },
 
 

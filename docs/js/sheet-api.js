@@ -59,6 +59,8 @@ const sheetApi = {
           if (data.code) form.append('code', data.code);
           if (data.photoBase64) form.append('photoBase64', data.photoBase64);
           if (data.photoName) form.append('photoName', data.photoName);
+          // 支援額外 metadata（例如 { isThumbnail: true }）
+          if (data.meta) form.append('meta', JSON.stringify(data.meta));
           options.body = form;
           // 刪除 headers，讓瀏覽器自動設定 boundary
           try {
@@ -193,49 +195,60 @@ const sheetApi = {
   /**
    * 分片上傳實作
    */
-  uploadPhotoChunked: async function(code, photoBase64, photoName = null, chunkSize = 100*1024, onProgress = null) {
+  uploadPhotoChunked: async function(code, photoBase64, photoName = null, chunkSize = 300*1024, onProgress = null, meta = null) {
+    // 並行分片上傳：減少 RTT 開銷，使用較大的 chunkSize（預設 300KB）
     const total = Math.ceil(photoBase64.length / chunkSize);
     if (!Number.isFinite(total) || total <= 0) throw new Error('invalid photo length for chunking');
     const uploadId = `${code}_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
 
-    let uploadedParts = 0;
-    for (let i = 0; i < total; i++) {
+    const parts = Array.from({ length: total }, (_, i) => {
       const start = i * chunkSize;
-      const chunk = photoBase64.slice(start, start + chunkSize);
+      return { index: i, chunk: photoBase64.slice(start, start + chunkSize) };
+    });
 
-      // 重試機制
-      const MAX_RETRIES = 3;
+    let completed = 0;
+    const concurrency = 3; // 調整並行數
+    const MAX_RETRIES = 3;
+
+    const uploadPart = async (part) => {
       let attempt = 0;
-      let ok = false;
       let lastErr = null;
-
-      while (attempt < MAX_RETRIES && !ok) {
+      while (attempt < MAX_RETRIES) {
         try {
-          await this.request('uploadChunk', 'POST', { uploadId, index: i, total, chunk });
-          ok = true;
-          uploadedParts++;
+          await this.request('uploadChunk', 'POST', { uploadId, index: part.index, total, chunk: part.chunk });
+          completed++;
+          if (typeof onProgress === 'function') {
+            try { onProgress(Math.round((completed/total)*100), completed, total); } catch(e){/* ignore */}
+          }
+          return true;
         } catch (err) {
           attempt++;
           lastErr = err;
-          console.warn(`uploadChunk attempt ${attempt} failed for ${uploadId}#${i}`, err);
-          // 小延遲再重試
-          await new Promise(r => setTimeout(r, 300 * attempt));
+          console.warn(`uploadChunk attempt ${attempt} failed for ${uploadId}#${part.index}`, err);
+          await new Promise(r => setTimeout(r, 200 * attempt));
         }
       }
+      throw new Error('uploadChunk failed after retries: ' + (lastErr && lastErr.message));
+    };
 
-      if (!ok) {
-        throw new Error('上傳分片失敗：' + (lastErr && lastErr.message));
+    const pool = [];
+    while (parts.length) {
+      while (pool.length < concurrency && parts.length) {
+        const p = parts.shift();
+        const prom = uploadPart(p).finally(() => {
+          const idx = pool.indexOf(prom);
+          if (idx >= 0) pool.splice(idx, 1);
+        });
+        pool.push(prom);
       }
-
-      if (typeof onProgress === 'function') {
-        try { onProgress(Math.round(((i+1)/total)*100), i, total); } catch(e){/* ignore */}
-      }
+      await Promise.race(pool);
     }
+    await Promise.all(pool);
 
-    if (uploadedParts === 0) throw new Error('no chunks were uploaded');
-
-    // 通知後端組合並完成上傳
-    const finishResult = await this.request('finishUpload', 'POST', { uploadId, code, photoName });
+    // 通知後端組合並完成上傳（傳遞 meta 以便後端可選擇性處理）
+    const finishPayload = { uploadId, code, photoName };
+    if (meta) finishPayload.meta = meta;
+    const finishResult = await this.request('finishUpload', 'POST', finishPayload);
     return finishResult;
   },
 
