@@ -255,8 +255,18 @@ const ui = {
     const normalizeBase = (p) => {
       if (!p) return null;
       if (p.name) return String(p.name).replace(/_thumb(?=\.[a-z]+$)/i, '').replace(/-thumb(?=\.[a-z]+$)/i, '');
-      // fallback: try URL
-      if (p.url) return p.url.replace(/_thumb(?=\.[a-z]+($|\?))/i, '').replace(/-thumb(?=\.[a-z]+($|\?))/i, '');
+      // 如果是 Google Drive 的分享連結，嘗試抽出 fileId 作為 base
+      if (p.url && /drive\.google\.com/.test(p.url)) {
+        try {
+          const m = p.url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+          if (m && m[1]) return `drive:${m[1]}`;
+        } catch (e) { /* ignore */ }
+      }
+      // fallback: try URL but strip query string and thumb suffix
+      if (p.url) {
+        const noQuery = String(p.url).split('?')[0];
+        return noQuery.replace(/_thumb(?=\.[a-z]+$)/i, '').replace(/-thumb(?=\.[a-z]+$)/i, '');
+      }
       return p.id || null;
     };
 

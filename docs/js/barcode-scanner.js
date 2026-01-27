@@ -402,7 +402,24 @@ const camera = {
         uploadSucceeded = true;
         // 添加到當前資產的照片列表（放最前面以便即時看到）
         if (!ui.currentAsset.photos) ui.currentAsset.photos = [];
-        ui.currentAsset.photos.unshift(result.photo);
+        // 去重：若已有相同 id 或相同 drive URL，則不要重覆加入
+        const newPhoto = result.photo || {};
+        const photoKey = (p => {
+          if (!p) return null;
+          if (p.id) return `id:${p.id}`;
+          if (p.url) {
+            const m = String(p.url).match(/\/d\/([a-zA-Z0-9_-]+)/);
+            if (m && m[1]) return `drive:${m[1]}`;
+            return String(p.url).split('?')[0];
+          }
+          return null;
+        })(newPhoto);
+
+        const exists = ui.currentAsset.photos.some(p => {
+          const k = (p && p.id) ? `id:${p.id}` : (p && p.url && (p.url.match(/\/d\//) ? `drive:${(p.url.match(/\/d\/([a-zA-Z0-9_-]+)/)||[])[1]}` : String(p.url).split('?')[0]));
+          return k && photoKey && k === photoKey;
+        });
+        if (!exists) ui.currentAsset.photos.unshift(newPhoto);
 
         // 關閉預覽視窗並清除暫存（使用者期望畫面消失）
         try { this.closePhotoPreview(); } catch (e) { /* ignore */ }
