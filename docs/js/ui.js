@@ -523,8 +523,8 @@ const ui = {
       .map(asset => `
         <div class="item-card" onclick="app.queryAsset('${asset.code}')">
           <div class="item-card-code">${asset.code}</div>
-          <div class="item-card-name">${asset.name}</div>
-          <div class="item-card-unit">${asset.unit}</div>
+          <div class="item-card-name">${(asset.model || asset.name) || '-'}</div>
+          <div class="item-card-unit">${(asset.location || asset.unit) || '-'}</div>
         </div>
       `)
       .join('');
