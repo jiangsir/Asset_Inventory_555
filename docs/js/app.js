@@ -219,6 +219,14 @@ const app = {
    * 查詢財產
    */
   queryAsset: async function(code) {
+    // 去重：防止條碼機短時間內多次觸發同一個查詢
+    if (this._lastQueryCode === code && this._lastQueryTime && Date.now() - this._lastQueryTime < 1000) {
+      console.debug('[queryAsset] 忽略重複查詢:', code);
+      return;
+    }
+    this._lastQueryCode = code;
+    this._lastQueryTime = Date.now();
+
     ui.showLoading('正在查詢財產...');
     console.log('%c━━ 【查詢財產】━━', 'color: #ff6600; font-weight: bold; font-size: 13px; background: #fff5e6; padding: 5px;');
     console.log('%c查詢編號:', 'color: #ff6600; font-weight: bold', `"${code}"`);
