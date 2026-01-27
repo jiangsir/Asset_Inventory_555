@@ -383,7 +383,13 @@ const ui = {
             setTimeout(tryNext, 50);
           };
           try {
-            img.src = url;
+            // Normalize Google Drive share links to direct UC links for embedding
+            let normalizedUrl = url;
+            try {
+              const m = String(url).match(/\/d\/([a-zA-Z0-9_-]+)/);
+              if (m && m[1]) normalizedUrl = 'https://drive.google.com/uc?export=view&id=' + m[1];
+            } catch (e) { /* ignore */ }
+            img.src = normalizedUrl;
           } catch (e) {
             console.debug('[photo] set src exception', e, url);
             tryNext();
