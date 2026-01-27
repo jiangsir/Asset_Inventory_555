@@ -490,7 +490,39 @@ const ui = {
    */
   loadRecentAssets: async function() {
     try {
-      const assets = await dataManager.getRecentAssets(6);
+      let assets = await dataManager.getRecentAssets(6);
+
+      // 智能回填：若 local recent 條目缺少 model 或 location，且非離線模式，
+      // 嘗試向後端請求最新的 asset（僅對顯示的前 N 筆進行，避免大量網路呼叫）
+      try {
+        const toBackfill = assets
+          .map(a => ({ code: a.code, missing: !(a.model && a.location) }))
+          .filter(x => x.code && x.missing)
+          .slice(0, 6);
+
+        if (!app.config.offlineMode && toBackfill.length > 0 && sheetApi && sheetApi.getAsset) {
+          await Promise.all(toBackfill.map(async (item, idx) => {
+            try {
+              const res = await sheetApi.getAsset(item.code);
+              if (res && res.success && res.asset) {
+                const fetched = res.asset;
+                if (res.sheetName) fetched.sheetName = res.sheetName;
+                // 更新本地 recent（會更新 backup）
+                dataManager.addRecentAsset(fetched);
+                // 同步更新本次顯示的陣列
+                const i = assets.findIndex(x => String(x.code) === String(item.code));
+                if (i !== -1) assets[i] = Object.assign({}, assets[i], fetched);
+                console.debug('[recent] backfilled', item.code);
+              }
+            } catch (e) {
+              console.debug('[recent] backfill failed for', item.code, e);
+            }
+          }));
+        }
+      } catch (e) {
+        console.debug('recent backfill inner error', e);
+      }
+
       this.displayRecentAssets(assets);
     } catch (error) {
       console.error('載入最近查詢失敗:', error);
