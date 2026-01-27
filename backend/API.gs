@@ -60,6 +60,15 @@ function doPost(e) {
         photoBase64: e.parameter.photoBase64 || null,
         photoName: e.parameter.photoName || null
       };
+      // 若有 meta（JSON 字串），嘗試解析
+      if (e.parameter.meta) {
+        try {
+          data.meta = JSON.parse(e.parameter.meta);
+        } catch (metaErr) {
+          Logger.log('doPost: failed to parse meta JSON — ' + metaErr);
+          data.meta = null;
+        }
+      }
       Logger.log('doPost: parsed fields from e.parameter (form data) — code=' + (data.code ? 'YES' : 'NO') + ', photoBase64 length=' + (data.photoBase64 ? data.photoBase64.length : 0));
     } else if (e.postData && e.postData.contents) {
       try {
@@ -265,19 +274,32 @@ function handleUploadPhoto(data) {
   }
 
   try {
-    const result = DriveManager.uploadPhoto(code, photoBase64, photoName);
+    // 傳遞 meta 到 DriveManager（例如 { isThumbnail: true }）
+    const result = DriveManager.uploadPhoto(code, photoBase64, photoName, data.meta || null);
 
-    if (result.success) {
+    if (result && result.success) {
+      // 若為縮圖，將縮圖 metadata 儲存在 PHOTO_METADATA 並嘗試立即把縮圖附加到 asset
+      try {
+        if (data.meta && data.meta.isThumbnail) {
+          // 在 metadata 表記錄（供 servePhoto 與 UI fallback 使用）
+          SheetManager.saveThumbnailMetadata(code, result.photo);
+          // 也把縮圖當作一般 photo 附加到資產（讓 UI 立即可見）
+          try { SheetManager.addPhotoToAsset(code, Object.assign({}, result.photo, { isThumbnail: true })); } catch(e){ Logger.log('[handleUploadPhoto] addPhotoToAsset for thumbnail failed: ' + e); }
+        }
+      } catch (e) {
+        Logger.log('[handleUploadPhoto] thumbnail postprocessing error: ' + e);
+      }
+
       return sendResponse({
         success: true,
         message: '照片已上傳',
         photo: result.photo
       });
     } else {
-      Logger.log('[handleUploadPhoto] DriveManager.uploadPhoto failed: ' + result.error);
+      Logger.log('[handleUploadPhoto] DriveManager.uploadPhoto failed: ' + (result && result.error));
       return sendResponse({
         success: false,
-        error: result.error || '上傳失敗'
+        error: result && result.error || '上傳失敗'
       }, 400);
     }
   } catch(error) {
@@ -336,7 +358,7 @@ function handleFinishUpload(data) {
       return sendResponse({ success: false, error: 'assembled data is empty or too small', debug: { partCount: assembled.partCount || 0 } }, 400);
     }
 
-    const result = DriveManager.uploadPhoto(code, base64, photoName);
+    const result = DriveManager.uploadPhoto(code, base64, photoName, data && data.meta ? data.meta : null);
 
     // 嘗試清理零散檔案（非阻塞）
     try { DriveManager.cleanupUploadParts(uploadId); } catch(e){ Logger.log('[handleFinishUpload] cleanup failed: ' + e); }
@@ -345,6 +367,13 @@ function handleFinishUpload(data) {
       Logger.log('[handleFinishUpload] uploadPhoto returned error: ' + (result && result.error));
       return sendResponse({ success: false, error: result && result.error ? result.error : '上傳失敗' }, 500);
     }
+
+    // 若分片上傳附帶 meta 且為縮圖，記錄 thumbnail metadata（以便 servePhoto fallback 使用）
+    try {
+      if (data && data.meta && data.meta.isThumbnail && result && result.photo) {
+        try { SheetManager.saveThumbnailMetadata(code, result.photo); } catch(e){ Logger.log('[handleFinishUpload] saveThumbnailMetadata failed: ' + e); }
+      }
+    } catch(e) { Logger.log('[handleFinishUpload] thumbnail postprocess check failed: ' + e); }
 
     // Drive 上傳成功——嘗試把照片 metadata 寫回 Spreadsheet（重試機制）
     const photo = result.photo;
@@ -458,6 +487,26 @@ function handleServePhoto(params) {
     // 保護：限制可內嵌的最大大小（避免一次回傳非常大的二進位）
     const MAX_INLINE_BYTES = 2.5 * 1024 * 1024; // 2.5MB
     if (size > MAX_INLINE_BYTES) {
+      // 嘗試回退到已上傳的縮圖（若有）
+      try {
+        const thumbMeta = SheetManager.getThumbnailMetadata(code);
+        if (thumbMeta && thumbMeta.id) {
+          try {
+            const thumbFile = DriveApp.getFileById(String(thumbMeta.id));
+            const thumbMime = thumbFile.getMimeType() || 'image/jpeg';
+            const thumbBytes = thumbFile.getBlob().getBytes();
+            const thumbB64 = Utilities.base64Encode(thumbBytes);
+            const thumbDataUrl = 'data:' + thumbMime + ';base64,' + thumbB64;
+            return sendResponse({ success: true, dataUrl: thumbDataUrl, mime: thumbMime, size: thumbFile.getSize(), servedAsThumbnail: true });
+          } catch (thumbErr) {
+            Logger.log('[handleServePhoto] failed to load thumbnail fallback: ' + thumbErr);
+            // fallthrough to original 413
+          }
+        }
+      } catch (e) {
+        Logger.log('[handleServePhoto] thumbnail fallback check failed: ' + e);
+      }
+
       return sendResponse({ success: false, error: 'file_too_large_for_inline_preview', size: size }, 413);
     }
 

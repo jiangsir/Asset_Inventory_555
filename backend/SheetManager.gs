@@ -503,22 +503,39 @@ const SheetManager = {
 
       const existingPhotos = this.parsePhotos(row[this.COLUMNS.M.index]);
 
-      // 去重
+      // 去重 / 處理 thumbnail 標記
       const exists = existingPhotos.some(p => String(p.id) === String(photoInfo.id));
+
+      // 如果這是縮圖（thumbnail），我們希望把它放在列表最前面以作為 preview
+      const isThumb = !!photoInfo.isThumbnail;
+
       if (!exists) {
-        existingPhotos.push({
+        const newEntry = {
           id: photoInfo.id,
           name: photoInfo.name || '',
           url: photoInfo.url || photoInfo.webViewLink || '',
           size: photoInfo.size || 0,
           mimeType: photoInfo.mimeType || '',
-          uploadDate: photoInfo.uploadDate || (new Date()).toISOString()
-        });
+          uploadDate: photoInfo.uploadDate || (new Date()).toISOString(),
+          isThumbnail: isThumb
+        };
+        if (isThumb) {
+          // 把縮圖放前面作為 preview
+          existingPhotos.unshift(newEntry);
+        } else {
+          existingPhotos.push(newEntry);
+        }
       } else {
-        // 若已存在則更新內容
+        // 若已存在則更新內容；若為縮圖則確保移到最前面並標記
         for (let i = 0; i < existingPhotos.length; i++) {
           if (String(existingPhotos[i].id) === String(photoInfo.id)) {
             existingPhotos[i] = Object.assign({}, existingPhotos[i], photoInfo);
+            if (isThumb) {
+              existingPhotos[i].isThumbnail = true;
+              // move to front
+              const entry = existingPhotos.splice(i,1)[0];
+              existingPhotos.unshift(entry);
+            }
             break;
           }
         }
@@ -618,6 +635,69 @@ const SheetManager = {
     } catch (e) {
       Logger.log('[logPendingAttachment] error: ' + e);
       return { success: false, error: e && e.toString ? e.toString() : String(e) };
+    }
+  },
+
+  /**
+   * 儲存 / 更新縮圖 metadata（供 servePhoto 與 UI fallback 使用）
+   * 表結構: PHOTO_METADATA (code | thumbFileId | thumbUrl | size | mimeType | uploadDate)
+   */
+  saveThumbnailMetadata: function(code, photoInfo) {
+    try {
+      if (!code || !photoInfo || !photoInfo.id) return { success: false, error: 'missing params' };
+      const ss = this.getSpreadsheet();
+      let sheet = ss.getSheetByName('PHOTO_METADATA');
+      if (!sheet) {
+        sheet = ss.insertSheet('PHOTO_METADATA');
+        sheet.appendRow(['code','thumbFileId','thumbUrl','size','mimeType','uploadDate']);
+      }
+
+      // 找到現有的 row（以 code 為 key），若存在則更新，否則 append
+      const data = sheet.getDataRange().getValues();
+      let foundRow = -1;
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]) === String(code)) { foundRow = i + 1; break; }
+      }
+
+      const row = [code, photoInfo.id, photoInfo.url || photoInfo.webViewLink || '', photoInfo.size || 0, photoInfo.mimeType || '', photoInfo.uploadDate || new Date().toISOString()];
+      if (foundRow > 0) {
+        sheet.getRange(foundRow, 1, 1, row.length).setValues([row]);
+      } else {
+        sheet.appendRow(row);
+      }
+      return { success: true };
+    } catch (e) {
+      Logger.log('[saveThumbnailMetadata] error: ' + e);
+      return { success: false, error: e && e.toString ? e.toString() : String(e) };
+    }
+  },
+
+  /**
+   * 取得指定資產的縮圖 metadata（若存在）
+   */
+  getThumbnailMetadata: function(code) {
+    try {
+      if (!code) return null;
+      const ss = this.getSpreadsheet();
+      const sheet = ss.getSheetByName('PHOTO_METADATA');
+      if (!sheet) return null;
+      const data = sheet.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]) === String(code)) {
+          return {
+            code: data[i][0],
+            id: data[i][1],
+            url: data[i][2],
+            size: data[i][3],
+            mimeType: data[i][4],
+            uploadDate: data[i][5]
+          };
+        }
+      }
+      return null;
+    } catch (e) {
+      Logger.log('[getThumbnailMetadata] error: ' + e);
+      return null;
     }
   },
 

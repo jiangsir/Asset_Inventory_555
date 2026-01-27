@@ -56,7 +56,7 @@ const DriveManager = {
    * @param {string} photoName - 照片名稱（可選）
    * @returns {object} {success: bool, photo: object}
    */
-  uploadPhoto: function(assetCode, photoBase64, photoName = null) {
+  uploadPhoto: function(assetCode, photoBase64, photoName = null, meta = null) {
     try {
       // 驗證參數
       if (!assetCode || !photoBase64) {
@@ -71,7 +71,7 @@ const DriveManager = {
         return { success: false, error: 'empty photoBase64' };
       }
 
-      Logger.log('[DriveManager.uploadPhoto] incoming — code=' + assetCode + ', photoBase64 length=' + String(photoBase64).length + ', photoName=' + (photoName || 'null'));
+      Logger.log('[DriveManager.uploadPhoto] incoming — code=' + assetCode + ', photoBase64 length=' + String(photoBase64).length + ', photoName=' + (photoName || 'null') + ', meta=' + (meta ? JSON.stringify(meta) : 'none'));
 
       let binaryString;
       try {
@@ -110,7 +110,9 @@ const DriveManager = {
         downloadUrl: file.getDownloadUrl(),
         uploadDate: new Date().toISOString(),
         size: file.getSize(),
-        mimeType: file.getMimeType()
+        mimeType: file.getMimeType(),
+        // 傳遞 meta 標記（例如 isThumbnail）回呼給上層
+        isThumbnail: meta && !!meta.isThumbnail
       };
 
       return {
