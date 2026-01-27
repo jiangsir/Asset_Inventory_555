@@ -556,6 +556,35 @@ select {
     object-fit: cover;
 }
 
+/* 原檔存在徽章（顯示於縮圖右上角） */
+.photo-badge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    background: rgba(0,0,0,0.5);
+    color: #fff;
+    padding: 3px 6px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    cursor: default;
+}
+.photo-badge:focus {
+    outline: 2px solid rgba(255,255,255,0.12);
+}
+.photo-badge .badge-dot {
+    width: 8px;
+    height: 8px;
+    background: #ffd54f;
+    border-radius: 50%;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
 .photo-remove {
     position: absolute;
     top: 4px;
@@ -573,6 +602,22 @@ select {
     font-size: 0.8rem;
     opacity: 0;
     transition: var(--transition);
+}
+
+/* modal: external link to Drive */
+.photo-external-link {
+    display: inline-block;
+    margin: 0.5rem 0 1rem 0;
+    color: var(--primary-color);
+    background: rgba(33,150,243,0.06);
+    border: 1px solid rgba(33,150,243,0.12);
+    padding: 0.4rem 0.6rem;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: 600;
+}
+.photo-external-link:hover {
+    background: rgba(33,150,243,0.12);
 }
 
 .photo-item:hover .photo-remove {

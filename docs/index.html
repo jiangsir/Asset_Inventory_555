@@ -291,6 +291,10 @@
             </div>
             <div class="modal-body">
                 <img id="photoPreview" src="" alt="照片預覽" class="photo-preview">
+
+                <!-- 如果原圖無法 inline 或使用者需要直接開啟 Drive，顯示此連結 -->
+                <a id="photoExternalLink" class="photo-external-link" href="#" target="_blank" rel="noopener" aria-hidden="true" style="display:none">在 Drive 開啟原圖</a>
+
                 <div class="modal-actions">
                     <button class="btn-primary" onclick="camera.confirmPhoto()">✓ 確認</button>
                     <button class="btn-secondary" onclick="camera.cancelPhoto()">✕ 重新拍照</button>

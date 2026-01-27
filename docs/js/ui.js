@@ -222,96 +222,134 @@ const ui = {
 
     // 簡單快取，避免重複向後端請求相同縮圖
     this._photoCache = this._photoCache || {};
+    // 用於 map 前端顯示索引 -> 實際 photo id(s)
+    this._displayPhotoMap = [];
 
-    photos.forEach((photo, index) => {
+    // 先把傳入的 photos 分群（若縮圖與原圖同時存在，視為一組）
+    const groups = [];
+    const byBase = new Map();
+
+    const normalizeBase = (p) => {
+      if (!p) return null;
+      if (p.name) return String(p.name).replace(/_thumb(?=\.[a-z]+$)/i, '').replace(/-thumb(?=\.[a-z]+$)/i, '');
+      // fallback: try URL
+      if (p.url) return p.url.replace(/_thumb(?=\.[a-z]+($|\?))/i, '').replace(/-thumb(?=\.[a-z]+($|\?))/i, '');
+      return p.id || null;
+    };
+
+    photos.forEach(p => {
+      const base = normalizeBase(p) || (p.id ? `id:${p.id}` : Math.random().toString(36).slice(2,8));
+      if (!byBase.has(base)) byBase.set(base, []);
+      byBase.get(base).push(p);
+    });
+
+    // 轉成 group（thumbnail 優先，full 優先為 viewer target）
+    for (const [base, items] of byBase.entries()) {
+      const group = { base, thumb: null, full: null, others: [] };
+      for (const it of items) {
+        if (it.isThumbnail || (it.name && /_thumb/i.test(it.name))) {
+          group.thumb = group.thumb || it;
+        } else if (!group.full) {
+          group.full = it;
+        } else {
+          group.others.push(it);
+        }
+      }
+      // 若沒有 thumbnail，但只有 full，將 full 當作 thumb（點擊時也會嘗試載入更大圖）
+      if (!group.thumb && group.full) group.thumb = group.full;
+      // 若只有其他（沒有 name/id），把第一個當 thumb
+      if (!group.thumb && group.others.length) group.thumb = group.others.shift();
+      groups.push(group);
+    }
+
+    // 實際渲染：只顯示每組的一張縮圖（若存在）
+    const limit = app.config.photoLimit || 0;
+    const toShow = limit > 0 ? groups.slice(0, limit) : groups;
+
+    toShow.forEach((g, idx) => {
       const div = document.createElement('div');
       div.className = 'photo-item';
 
-      // placeholder img (會被 async 填入 src)
       const img = document.createElement('img');
-      img.alt = `照片 ${index + 1}`;
-      img.dataset.photoIndex = index;
+      img.alt = `照片 ${idx + 1}`;
       img.className = 'photo-thumb';
       img.src = '';
-      img.onload = () => { img.classList.remove('loading'); };
-      img.onerror = () => { img.classList.add('broken'); img.alt = `照片 ${index + 1}`; };
+      img.dataset.displayIndex = idx;
+      img.setAttribute('role', 'button');
 
       const removeBtn = document.createElement('button');
       removeBtn.className = 'photo-remove';
       removeBtn.textContent = '✕';
-      removeBtn.onclick = () => ui.removePhoto(index);
+      removeBtn.onclick = () => ui.removePhoto(idx);
 
       div.appendChild(img);
       div.appendChild(removeBtn);
       gallery.appendChild(div);
 
-      // 決定如何取得可用的 src：
-      // - 若 photo.url 是一般可直接嵌入的圖檔（非 private Drive），直接使用
-      // - 若 photo.id 存在或 URL 為 Drive 的 webView，使用後端 proxy servePhoto 取得 dataURL
-      const isLikelyDirect = photo.url && (/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i.test(photo.url) || /googleusercontent\.com/.test(photo.url));
+      // 記錄 mapping（thumbId, fullId）以便刪除/檢視使用
+      const mapEntry = { thumbId: g.thumb && g.thumb.id, fullId: g.full && g.full.id, thumbUrl: g.thumb && g.thumb.url, fullUrl: g.full && g.full.url };
+      this._displayPhotoMap.push(mapEntry);
 
-      if (isLikelyDirect) {
-        img.src = photo.url;
-        img.onclick = () => ui.viewPhoto(photo.url);
-      } else if (photo.id) {
-        const cacheKey = `id:${photo.id}`;
+      // 若存在原圖（fullId 或 fullUrl 且與 thumb 不相同），在縮圖上顯示小徽章
+      if ((mapEntry.fullId && String(mapEntry.fullId) !== String(mapEntry.thumbId)) || (mapEntry.fullUrl && mapEntry.fullUrl !== mapEntry.thumbUrl)) {
+        const badge = document.createElement('div');
+        badge.className = 'photo-badge';
+        badge.title = '有原圖，點擊以檢視完整影像';
+        badge.setAttribute('role', 'button');
+        badge.setAttribute('tabindex', '0');
+        badge.innerHTML = `<span class="badge-dot" aria-hidden="true"></span><span class="badge-text">原圖</span>`;
+        badge.onclick = (ev) => {
+          ev.stopPropagation();
+          ui.viewPhotoFull(mapEntry, false);
+        };
+        badge.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); ui.viewPhotoFull(mapEntry, false); } };
+        // append badge to the photo-item container (left-top)
+        div.appendChild(badge);
+      }
+
+      // 取得縮圖 src（優先使用 thumbnail 檔案 id 的 inline dataUrl）
+      const setThumbSrc = (src, servedAsThumbnail) => {
+        img.src = src;
+        img.classList.remove('loading');
+        img.onclick = () => ui.viewPhotoFull(mapEntry, servedAsThumbnail);
+      };
+
+      // 如果 thumb 有 id，透過 proxy 取得 dataUrl（或 uc fallback）
+      if (g.thumb && g.thumb.id) {
+        const cacheKey = `id:${g.thumb.id}`;
         if (this._photoCache[cacheKey]) {
-          img.src = this._photoCache[cacheKey];
-          img.onclick = () => ui.viewPhoto(this._photoCache[cacheKey]);
+          setThumbSrc(this._photoCache[cacheKey], true);
         } else {
           img.classList.add('loading');
-          // async fetch via proxy
-          sheetApi.getPhoto({ fileId: photo.id }).then(res => {
+          sheetApi.getPhoto({ fileId: g.thumb.id }).then(res => {
             if (res && res.success && res.dataUrl) {
               this._photoCache[cacheKey] = res.dataUrl;
-              img.src = res.dataUrl;
-              img.onclick = () => ui.viewPhoto(res.dataUrl);
+              setThumbSrc(res.dataUrl, true);
               return;
             }
-
-            // 若檔案過大無法 inline，嘗試使用通用的 Drive embed URL（若檔案為私有，瀏覽器仍可能無法載入）
+            // fallback to drive uc if inline not available
             if (res && res.error === 'file_too_large_for_inline_preview') {
-              const uc = 'https://drive.google.com/uc?export=view&id=' + photo.id;
+              const uc = 'https://drive.google.com/uc?export=view&id=' + g.thumb.id;
               this._photoCache[cacheKey] = uc;
-              img.src = uc;
-              img.onclick = () => ui.viewPhoto(uc);
+              setThumbSrc(uc, false);
               return;
             }
+            img.classList.add('broken');
+          }).catch(err => { console.warn('servePhoto error', err); img.classList.add('broken'); });
+        }
 
-            console.warn('servePhoto failed for', photo.id, res && res.error);
-            img.classList.add('broken');
-          }).catch(err => {
-            console.warn('servePhoto error', err);
-            img.classList.add('broken');
-          });
-        }
-      } else if (photo.url && /drive\.google\.com/.test(photo.url)) {
-        // Drive webView link without id field — try to extract id then proxy
-        const m = (photo.url.match(/[-\w]{25,}/) || [])[0];
-        if (m) {
-          const cacheKey = `id:${m}`;
-          if (this._photoCache[cacheKey]) {
-            img.src = this._photoCache[cacheKey];
-            img.onclick = () => ui.viewPhoto(this._photoCache[cacheKey]);
-          } else {
-            img.classList.add('loading');
-            sheetApi.getPhoto({ fileId: m }).then(res => {
-              if (res && res.success && res.dataUrl) {
-                this._photoCache[cacheKey] = res.dataUrl;
-                img.src = res.dataUrl;
-                img.onclick = () => ui.viewPhoto(res.dataUrl);
-              } else {
-                img.classList.add('broken');
-              }
-            }).catch(() => img.classList.add('broken'));
-          }
-        } else {
-          img.classList.add('broken');
-        }
-      } else if (photo.url) {
-        // 最後的嘗試：直接使用 URL（可能會被瀏覽器阻擋或顯示 broken）
-        img.src = photo.url;
-        img.onclick = () => ui.viewPhoto(photo.url);
+      } else if (g.thumb && g.thumb.url) {
+        // 直接用可嵌入的 URL
+        setThumbSrc(g.thumb.url, false);
+      } else {
+        img.classList.add('broken');
+      }
+    });
+
+    // 更新照片計數
+    const limitText = limit === 0 ? '無限制' : `最多 ${limit} 張`;
+    document.getElementById('photoHint').textContent = `已上傳 ${groups.length} 張 / ${limitText}`;
+  },
       } else {
         img.classList.add('broken');
       }
@@ -335,40 +373,122 @@ const ui = {
   },
 
   /**
-   * 刪除照片
+   * 在畫廊中點擊縮圖：嘗試載入原圖（若有），否則顯示縮圖
+   * mapEntry: { thumbId, fullId, thumbUrl, fullUrl }
    */
-  removePhoto: async function(index) {
-    if (!this.currentAsset || !this.currentAsset.photos || !this.currentAsset.photos[index]) return;
+  viewPhotoFull: async function(mapEntry = {}, servedAsThumbnail = false) {
+    const modal = document.getElementById('photoModal');
+    const preview = document.getElementById('photoPreview');
 
-    const photo = this.currentAsset.photos[index];
+    // 先用 thumbnail 作為 placeholder（若有）
+    if (mapEntry.thumbId) {
+      const cacheKey = `id:${mapEntry.thumbId}`;
+      if (this._photoCache && this._photoCache[cacheKey]) preview.src = this._photoCache[cacheKey];
+      else if (mapEntry.thumbUrl) preview.src = mapEntry.thumbUrl;
+    } else if (mapEntry.thumbUrl) {
+      preview.src = mapEntry.thumbUrl;
+    } else {
+      preview.src = '';
+    }
+
+    modal.style.display = 'flex';
+
+    // 更新 modal 的外部連結（Drive）顯示狀態
+    try {
+      const externalLink = document.getElementById('photoExternalLink');
+      if (externalLink) {
+        externalLink.style.display = 'none';
+        externalLink.removeAttribute('href');
+        externalLink.setAttribute('aria-hidden', 'true');
+      }
+    } catch (e) { /* ignore */ }
+
+    // 嘗試載入 full image（優先 fileId，再 fullUrl）
+    try {
+      if (mapEntry.fullId) {
+        const res = await sheetApi.getPhoto({ fileId: mapEntry.fullId });
+        if (res && res.success && res.dataUrl) {
+          preview.src = res.dataUrl;
+          return;
+        }
+        // 若回傳 413 或无法 inline，顯示「在 Drive 開啟」連結並保留縮圖
+        if (res && res.error === 'file_too_large_for_inline_preview') {
+          const driveUrl = 'https://drive.google.com/uc?export=view&id=' + mapEntry.fullId;
+          preview.dataset.fallbackLink = driveUrl;
+          try {
+            const externalLink = document.getElementById('photoExternalLink');
+            if (externalLink) {
+              externalLink.href = driveUrl;
+              externalLink.style.display = 'inline-block';
+              externalLink.setAttribute('aria-hidden', 'false');
+            }
+          } catch (e) { /* ignore */ }
+          return;
+        }
+      }
+
+      if (mapEntry.fullUrl) {
+        // 直接嘗試載入遠端 fullUrl（可能需要授權）
+        preview.src = mapEntry.fullUrl;
+        try {
+          const externalLink = document.getElementById('photoExternalLink');
+          if (externalLink) {
+            externalLink.href = mapEntry.fullUrl;
+            externalLink.style.display = 'inline-block';
+            externalLink.setAttribute('aria-hidden', 'false');
+          }
+        } catch (e) { /* ignore */ }
+        return;
+      }
+
+    } catch (err) {
+      console.warn('viewPhotoFull failed to load full image', err);
+    }
+
+    // 最後回退：如果只有縮圖，已經顯示縮圖；若什麼都沒有，顯示破圖標示
+    if (!preview.src) {
+      preview.classList.add('broken');
+    }
+  },
+
+  /**
+   * 刪除照片（支援以畫廊索引刪除整組）
+   */
+  removePhoto: async function(displayIndex) {
+    // map back to actual photo ids
+    const map = (this._displayPhotoMap && this._displayPhotoMap[displayIndex]) || null;
+    if (!this.currentAsset || !this.currentAsset.photos || !map) return;
+
     if (!confirm('確定要刪除這張照片嗎？')) return;
 
-    // Optimistic UI: disable remove button for this item
+    // Optimistic UI: mute the gallery item
     const gallery = document.getElementById('photoGallery');
-    const item = gallery && gallery.children && gallery.children[index];
+    const item = gallery && gallery.children && gallery.children[displayIndex];
     if (item) item.classList.add('muted');
 
     try {
-      // 若照片有 Drive file id，呼叫後端原子刪除（Drive + sheet）
-      if (photo.id) {
-        const res = await sheetApi.removePhoto(this.currentAsset.code, photo.id);
-        if (res && (res.success || res.warning)) {
-          // 移除本地並更新視圖
-          this.currentAsset.photos.splice(index, 1);
-          this.displayPhotos(this.currentAsset.photos);
-          ui.showNotification('success', '刪除完成', '照片已從系統移除');
-          return;
-        }
+      // 優先刪除 full image（若存在），否則刪除縮圖
+      const targetId = map.fullId || map.thumbId || null;
 
-        // 失敗：回滾 UI
-        throw new Error((res && res.error) || 'remove failed');
+      if (targetId) {
+        const res = await sheetApi.removePhoto(this.currentAsset.code, targetId);
+        if (!(res && (res.success || res.warning))) throw new Error((res && res.error) || 'remove failed');
+
+        // 從本地 currentAsset.photos 中移除所有對應的 id（thumb/full）
+        this.currentAsset.photos = (this.currentAsset.photos || []).filter(p => String(p.id) !== String(map.fullId) && String(p.id) !== String(map.thumbId));
+
+        // 更新 UI（並同步至後端以確保一致性）
+        this.displayPhotos(this.currentAsset.photos);
+        ui.showNotification('success', '刪除完成', '照片已從系統移除');
+        return;
       }
 
-      // 若沒有 photo.id（只有 url），只更新 sheet（透過 saveAsset）
-      this.currentAsset.photos.splice(index, 1);
+      // 若沒有 id（只有 URL），直接從本地移除並透過 saveAsset 更新 sheet
+      this.currentAsset.photos = (this.currentAsset.photos || []).filter(p => p.url !== map.thumbUrl && p.url !== map.fullUrl);
       await app.saveAsset(this.currentAsset);
       this.displayPhotos(this.currentAsset.photos);
       ui.showNotification('success', '刪除完成', '照片已從記錄移除');
+
     } catch (err) {
       console.warn('removePhoto failed:', err);
       if (item) item.classList.remove('muted');
