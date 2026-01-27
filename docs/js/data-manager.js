@@ -141,7 +141,7 @@ const dataManager = {
 
   /**
    * 本地備份：把最近查詢用一個輕量快照寫入 localStorage（同步、可靠）
-   * 備份格式：[{ code, name, unit, queryTime }, ...]
+   * 備份格式：[{ code, model, name, location, unit, sheetName, queryTime }, ...]
    */
   _saveRecentBackup: function(asset, maxItems = 20) {
     try {
@@ -150,7 +150,15 @@ const dataManager = {
       let arr = raw ? JSON.parse(raw) : [];
       // 移除同 code 的舊項
       arr = arr.filter(a => String(a.code) !== String(asset.code));
-      arr.unshift({ code: asset.code, name: asset.name || '', unit: asset.unit || '', queryTime: asset.queryTime || new Date().toISOString() });
+      arr.unshift({
+        code: asset.code,
+        model: asset.model || asset.name || '',
+        name: asset.name || '',
+        location: asset.location || asset.unit || '',
+        unit: asset.unit || '',
+        sheetName: asset.sheetName || '',
+        queryTime: asset.queryTime || new Date().toISOString()
+      });
       arr = arr.slice(0, maxItems);
       localStorage.setItem(key, JSON.stringify(arr));
     } catch (e) {
