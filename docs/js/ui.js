@@ -289,7 +289,18 @@ const ui = {
     const limit = app.config.photoLimit || 0;
     const toShow = limit > 0 ? groups.slice(0, limit) : groups;
 
+    // 防止原始資料中出現多組代表同一張實物（例如 dataURL 與 server URL 同時存在）而產生重複顯示
+    const displayedKeys = new Set();
+
     toShow.forEach((g, idx) => {
+      // representative key 用於去重：優先 fullId，再 thumbId，再 fullUrl，再 thumbUrl，再 base
+      const repKey = (g.full && g.full.id) ? `id:${g.full.id}` : (g.thumb && g.thumb.id) ? `id:${g.thumb.id}` : (g.full && g.full.url) ? `url:${g.full.url}` : (g.thumb && g.thumb.url) ? `url:${g.thumb.url}` : `base:${g.base}`;
+      if (displayedKeys.has(repKey)) {
+        return; // skip duplicate
+      }
+      displayedKeys.add(repKey);
+
+      // continue rendering
       const div = document.createElement('div');
       div.className = 'photo-item';
 
