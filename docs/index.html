@@ -48,6 +48,38 @@
                         autofocus
                         aria-label="掃描或輸入財產編號"
                     >
+                    <script>
+                      // INLINE FALLBACK: 立即綁定 Enter 行為（避免 app.init 未完成時無法使用）
+                      (function(){
+                        const el = document.getElementById('assetCodeInput');
+                        if (!el) return;
+                        el.addEventListener('keydown', function(e){
+                          if (e.key === 'Enter' || e.code === 'NumpadEnter'){
+                            const v = (this.value || '').trim();
+                            if (!v) return;
+                            e.preventDefault();
+                            // 若 app.ready，委派給 app.queryAsset；否則記錄並等待 app 初始化完成
+                            if (window.app && typeof app.queryAsset === 'function') {
+                              app.queryAsset(v);
+                            } else {
+                              console.debug('[inline-enter-fallback] app not ready, queuing query for', v);
+                              // 暫存於 window 以便 app.init 後可處理（非破壞性）
+                              window.__pendingAssetQuery = v;
+                            }
+                          }
+                        });
+
+                        // 若頁面載入時已經有 pending query（例如掃描器直接貼上），嘗試自動觸發
+                        el.addEventListener('input', () => {
+                          const val = (el.value || '').trim();
+                          if (val && /\n/.test(el.value)) {
+                            const code = val.replace(/\s+/g,'');
+                            if (window.app && typeof app.queryAsset === 'function') app.queryAsset(code);
+                            else window.__pendingAssetQuery = code;
+                          }
+                        });
+                      })();
+                    </script>
                     <button class="btn-primary" onclick="scanner.openCamera()">
                         📷 打開相機
                     </button>
