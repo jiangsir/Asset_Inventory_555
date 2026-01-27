@@ -143,11 +143,15 @@ const app = {
       console.log('%c━━━━━━━━━━━━', 'color: #ff6600; font-weight: bold; font-size: 13px; background: #fff5e6; padding: 5px;');
 
       if (asset.success) {
-        // 保存到最近查詢歷史
-        dataManager.addRecentAsset(asset.asset);
+        // 把 wrapper-level 的 sheetName 注入到實際 asset 物件（後端把 sheetName 放在 response 層）
+        const fetched = asset.asset || {};
+        if (asset.sheetName) fetched.sheetName = asset.sheetName;
 
-        // 顯示詳情界面
-        ui.showAssetDetail(asset.asset);
+        // 保存到最近查詢歷史（含 sheetName），並顯示詳情
+        dataManager.addRecentAsset(fetched);
+
+        // 顯示詳情界面（badge 會顯示 fetched.sheetName）
+        ui.showAssetDetail(fetched);
       } else {
         ui.showNotification('error', '查詢失敗', asset.error || '未找到該財產');
       }
@@ -207,7 +211,12 @@ const app = {
       if (result.success) {
         ui.showNotification('success', '保存成功', '財產信息已更新');
 
-        // 更新本地存儲
+        // 若後端把 sheetName 放在 wrapper 層，注入到 result.asset（確保 UI 能顯示）
+        if (result.sheetName && result.asset) {
+          result.asset.sheetName = result.sheetName;
+        }
+
+        // 更新本地存儲（包含 sheetName）
         dataManager.updateAsset(result.asset);
 
         // 刷新顯示

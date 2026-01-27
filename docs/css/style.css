@@ -179,6 +179,15 @@ body {
     line-height: 1;
     vertical-align: middle;
     box-shadow: none;
+    transition: background 120ms ease, transform 120ms ease;
+    cursor: default;
+}
+
+.sheet-name-badge:hover,
+.sheet-name-badge:focus {
+    background: rgba(33,150,243,0.12);
+    transform: translateY(-1px);
+    cursor: pointer;
 }
 
 .sheet-name-badge.visually-hidden {

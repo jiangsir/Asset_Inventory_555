@@ -104,11 +104,49 @@ const ui = {
         sheetBadge.title = `工作表：${asset.sheetName}`;
         sheetBadge.setAttribute('aria-hidden', 'false');
         sheetBadge.classList.remove('visually-hidden');
+
+        // 可點擊以複製工作表名稱（提供回饋），同時支援鍵盤操作
+        sheetBadge.setAttribute('role', 'button');
+        sheetBadge.setAttribute('tabindex', '0');
+        sheetBadge.style.cursor = 'pointer';
+        const copySheetName = async () => {
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              await navigator.clipboard.writeText(asset.sheetName);
+              ui.showNotification('success', '已複製', `工作表名稱已複製：${asset.sheetName}`);
+            } else {
+              // fallback
+              const ta = document.createElement('textarea');
+              ta.value = asset.sheetName;
+              document.body.appendChild(ta);
+              ta.select();
+              document.execCommand('copy');
+              document.body.removeChild(ta);
+              ui.showNotification('success', '已複製', `工作表名稱已複製：${asset.sheetName}`);
+            }
+          } catch (err) {
+            console.warn('copy failed', err);
+            ui.showNotification('error', '複製失敗', '無法複製工作表名稱');
+          }
+        };
+        sheetBadge.onclick = copySheetName;
+        sheetBadge.onkeydown = (ev) => {
+          if (ev.key === 'Enter' || ev.key === ' ') {
+            ev.preventDefault();
+            copySheetName();
+          }
+        };
+
       } else {
         sheetBadge.textContent = '';
         sheetBadge.title = '工作表名稱';
         sheetBadge.setAttribute('aria-hidden', 'true');
         sheetBadge.classList.add('visually-hidden');
+        sheetBadge.removeAttribute('role');
+        sheetBadge.removeAttribute('tabindex');
+        sheetBadge.onclick = null;
+        sheetBadge.onkeydown = null;
+        sheetBadge.style.cursor = '';
       }
     }
 
