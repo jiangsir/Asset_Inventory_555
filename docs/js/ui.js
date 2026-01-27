@@ -43,6 +43,25 @@ const ui = {
         app.config.photoLimit = parseInt(e.target.value) || 10;
       });
     }
+
+    // 事件委派：處理最近查詢卡片點擊（使用 data-code 屬性）
+    const recentContainer = document.getElementById('recentItemsContainer');
+    if (recentContainer) {
+      recentContainer.addEventListener('click', (ev) => {
+        try {
+          let el = ev.target;
+          while (el && !el.classList.contains('item-card')) el = el.parentElement;
+          if (!el) return;
+          const code = el.getAttribute('data-code') || (el.dataset && el.dataset.code);
+          if (!code) return;
+          if (window.app && typeof app.queryAsset === 'function') {
+            app.queryAsset(code);
+          }
+        } catch (e) {
+          console.debug('[ui] recent click handler error', e);
+        }
+      });
+    }
   },
 
   /**
@@ -565,7 +584,7 @@ const ui = {
 
     container.innerHTML = assets
       .map(asset => `
-        <div class="item-card" onclick="app.queryAsset('${asset.code}')">
+        <div class="item-card" data-code="${asset.code}">
           <div class="item-card-code">${asset.code}</div>
           <div class="item-card-name">${(asset.model || asset.name) || ''}</div>
           <div class="item-card-unit">${(asset.location || asset.unit) || ''}</div>
