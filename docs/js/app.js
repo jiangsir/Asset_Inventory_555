@@ -163,6 +163,30 @@ const app = {
     codeInput.addEventListener('focus', () => {
       codeInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
+
+    // 全域容錯：如果 input 的 keydown 沒被觸發（瀏覽器/IME 差異），再綁一個 document 級別的 Enter fallback
+    // 此處只在 assetCodeInput 為 activeElement 時生效，避免干擾其他表單
+    if (!this._enteredFallbackBound) {
+      this._enteredFallbackBound = true;
+      document.addEventListener('keydown', (ev) => {
+        try {
+          const active = document.activeElement;
+          if (!active) return;
+          if (active.id !== 'assetCodeInput') return;
+          if (ev.key === 'Enter' || ev.code === 'NumpadEnter') {
+            const v = active.value && active.value.trim();
+            if (v) {
+              ev.preventDefault();
+              // debug hook — 可在 console 搜尋 "[ENTER FALLBACK]"
+              console.debug('[ENTER FALLBACK] triggering query for', v);
+              this.queryAsset(v);
+            }
+          }
+        } catch (e) {
+          console.debug('enter fallback error', e);
+        }
+      });
+    }
   },
 
   /**
