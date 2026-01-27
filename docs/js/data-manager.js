@@ -123,20 +123,37 @@ const dataManager = {
     const assets = await this.getRecentAssets(6);
     const container = document.getElementById('recentItemsContainer');
 
-    if (assets.length === 0) {
-      container.innerHTML = '<p class="text-muted">暫無最近查詢</p>';
+    // If there are no assets, do not blindly overwrite an inline backup render.
+    // Only show the empty message if the container is currently empty.
+    if (!assets || assets.length === 0) {
+      if (container && (!container.children || container.children.length === 0)) {
+        container.innerHTML = '<p class="text-muted">暫無最近查詢</p>';
+      }
       return;
     }
 
-    container.innerHTML = assets
-      .map(asset => `
-        <div class="item-card" onclick="app.queryAsset('${asset.code}')">
-          <div class="item-card-code">${asset.code}</div>
-          <div class="item-card-name">${asset.name}</div>
-          <div class="item-card-unit">${asset.unit}</div>
-        </div>
-      `)
-      .join('');
+    // Prefer using the UI module's rendering (keeps templates consistent).
+    if (window.ui && typeof ui.displayRecentAssets === 'function') {
+      try {
+        ui.displayRecentAssets(assets);
+        return;
+      } catch (e) {
+        console.debug('[dataManager] ui.displayRecentAssets failed', e);
+      }
+    }
+
+    // Fallback: render with model/location (preserve user's requested fields)
+    if (container) {
+      container.innerHTML = assets
+        .map(asset => `
+          <div class="item-card" onclick="app.queryAsset('${asset.code}')">
+            <div class="item-card-code">${asset.code}</div>
+            <div class="item-card-name">${(asset.model || asset.name) || ''}</div>
+            <div class="item-card-unit">${(asset.location || asset.unit) || ''}</div>
+          </div>
+        `)
+        .join('');
+    }
   },
 
   /**

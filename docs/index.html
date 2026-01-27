@@ -92,9 +92,29 @@
                 <!-- 最近掃描歷史 -->
                 <div class="recent-list" id="recentList">
                     <h3>最近查詢</h3>
-                    <div id="recentItemsContainer" class="items-grid">
-                        <!-- 動態生成 -->
-                    </div>
+                                        <div id="recentItemsContainer" class="items-grid">
+                                                <!-- 動態生成 -->
+                                        </div>
+                                        <script>
+                                            // INLINE: immediate recent backup render (non-destructive)
+                                            (function(){
+                                                try {
+                                                    const key = 'recent_backup_v1';
+                                                    const raw = localStorage.getItem(key);
+                                                    if (!raw) return;
+                                                    const items = JSON.parse(raw);
+                                                    if (!items || !items.length) return;
+                                                    const container = document.getElementById('recentItemsContainer');
+                                                    if (!container) return;
+                                                    // 如果 app 已經渲染 recent，就不覆蓋
+                                                    if (container.children && container.children.length) return;
+                                                    container.innerHTML = items.slice(0,6).map(asset => `\n                            <div class="item-card" onclick="(window.app&&app.queryAsset)?app.queryAsset('${asset.code}'):null">\n                              <div class="item-card-code">${asset.code}</div>\n                              <div class="item-card-name">${(asset.model||asset.name)||''}</div>\n                              <div class="item-card-unit">${(asset.location||asset.unit)||''}</div>\n                            </div>\n                          `).join('');
+                                                    console.debug('[inline-recent] rendered from local backup', items.length);
+                                                } catch (e) {
+                                                    console.debug('[inline-recent] failed', e);
+                                                }
+                                            })();
+                                        </script>
                 </div>
 
                 <!-- 快速搜索建議 -->
