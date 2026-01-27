@@ -358,30 +358,45 @@ const ui = {
           // 嘗試從 server 取得 inline preview，若無再 fallback 到 drive uc 或其他可嵌入 URL
           sheetApi.getPhoto({ fileId: g.thumb.id }).then(res => {
             try {
-              if (res && res.success && res.dataUrl) {
-                this._photoCache[cacheKey] = res.dataUrl;
-                setThumbSrc(res.dataUrl, true);
+              // helper: normalize server response into a usable src
+              const normalizeSrc = (resObj) => {
+                if (!resObj) return null;
+                if (resObj.dataUrl) {
+                  const d = String(resObj.dataUrl).trim();
+                  if (/^data:\w+\/.+;base64,/.test(d)) return d;
+                  // 如果看起來是純 base64（或 data URI 缺前綴），嘗試補上 JPEG 前綴
+                  if (/^[A-Za-z0-9+/=\s]+$/.test(d) && d.length > 100) {
+                    return 'data:image/jpeg;base64,' + d.replace(/\s+/g, '');
+                  }
+                  // 如果 server 回傳的是 URL 字串
+                  if (/^https?:\/\//i.test(d)) return d;
+                }
+                if (resObj.url && /^https?:\/\//i.test(resObj.url)) return resObj.url;
+                return null;
+              };
+
+              const normalized = normalizeSrc(res);
+              if (normalized) {
+                this._photoCache[cacheKey] = normalized;
+                setThumbSrc(normalized, !!(res && res.dataUrl && /^data:/i.test(res.dataUrl)));
                 return;
               }
 
-              // server 可能回傳一個可用的 url 字段
-              if (res && res.url) {
-                this._photoCache[cacheKey] = res.url;
-                setThumbSrc(res.url, false);
-                return;
-              }
-
-              // 若錯誤為檔案過大或 server 無法 inline，嘗試使用 Drive 的 uc 連結作為 fallback
+              // 最後備援：嘗試使用 Drive 的 uc 連結
               const uc = 'https://drive.google.com/uc?export=view&id=' + g.thumb.id;
-              // 嘗試先檢查該 uc 是否可用（透過 Image 物件快速預載）
+              // 預載測試 uc 是否可用
               const testImg = new Image();
+              let usedFallback = false;
               testImg.onload = () => {
+                usedFallback = true;
                 this._photoCache[cacheKey] = uc;
                 setThumbSrc(uc, false);
               };
               testImg.onerror = () => {
-                console.debug('[servePhoto] uc fallback failed for id=', g.thumb.id, 'server response=', res);
-                img.classList.add('broken');
+                if (!usedFallback) {
+                  console.debug('[servePhoto] uc fallback failed for id=', g.thumb.id, 'server response=', res);
+                  img.classList.add('broken');
+                }
               };
               testImg.src = uc;
             } catch (e) {
