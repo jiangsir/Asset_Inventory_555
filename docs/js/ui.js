@@ -96,6 +96,22 @@ const ui = {
     // 填充照片
     this.displayPhotos(asset.photos);
 
+    // 在標題旁顯示工作表名稱（若後端有提供）
+    const sheetBadge = document.getElementById('detailSheetName');
+    if (sheetBadge) {
+      if (asset.sheetName) {
+        sheetBadge.textContent = asset.sheetName;
+        sheetBadge.title = `工作表：${asset.sheetName}`;
+        sheetBadge.setAttribute('aria-hidden', 'false');
+        sheetBadge.classList.remove('visually-hidden');
+      } else {
+        sheetBadge.textContent = '';
+        sheetBadge.title = '工作表名稱';
+        sheetBadge.setAttribute('aria-hidden', 'true');
+        sheetBadge.classList.add('visually-hidden');
+      }
+    }
+
     // 顯示詳情屏幕
     this.showScreen('detailSection');
   },

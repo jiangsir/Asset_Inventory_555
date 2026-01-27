@@ -160,9 +160,42 @@ body {
     flex: 1;
 }
 
+/* 工作表名稱徽章（顯示在詳情標題旁） */
+.sheet-name-badge {
+    display: inline-block;
+    min-width: 3.6rem;
+    max-width: 20rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0.25rem 0.6rem;
+    margin-left: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    background: rgba(33,150,243,0.08);
+    border: 1px solid rgba(33,150,243,0.12);
+    border-radius: 999px;
+    line-height: 1;
+    vertical-align: middle;
+    box-shadow: none;
+}
+
+.sheet-name-badge.visually-hidden {
+    opacity: 0;
+    height: 0;
+    width: 0;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
 .spacer {
     flex: 1;
 }
+
 
 .screen-content {
     flex: 1;
