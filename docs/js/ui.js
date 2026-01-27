@@ -343,9 +343,46 @@ const ui = {
 
       // 取得縮圖 src（優先使用 thumbnail 檔案 id 的 inline dataUrl）
       const setThumbSrc = (src, servedAsThumbnail) => {
-        img.src = src;
         img.classList.remove('loading');
+
+        // Build fallback candidate list (prioritize provided src)
+        const candidates = [];
+        if (src) candidates.push(src);
+        if (g.full && g.full.url) candidates.push(g.full.url);
+        if (g.thumb && g.thumb.url) candidates.push(g.thumb.url);
+        if (g.full && g.full.id) candidates.push('https://drive.google.com/uc?export=view&id=' + g.full.id);
+        if (g.thumb && g.thumb.id) candidates.push('https://drive.google.com/uc?export=view&id=' + g.thumb.id);
+
+        const tried = new Set();
+        let idx = 0;
+
+        const tryNext = () => {
+          if (idx >= candidates.length) {
+            img.classList.add('broken');
+            img.onerror = null;
+            return;
+          }
+          const url = candidates[idx++];
+          if (!url || tried.has(url)) return tryNext();
+          tried.add(url);
+          // assign onerror to try next candidate when current fails
+          img.onerror = () => {
+            console.debug('[photo] thumbnail load failed, trying next fallback', url);
+            // small delay to allow browser state settle
+            setTimeout(tryNext, 50);
+          };
+          try {
+            img.src = url;
+          } catch (e) {
+            console.debug('[photo] set src exception', e, url);
+            tryNext();
+          }
+        };
+
+        // click opens full viewer; servedAsThumbnail indicates whether src was an inline thumbnail
         img.onclick = () => ui.viewPhotoFull(mapEntry, servedAsThumbnail);
+        // start attempts
+        tryNext();
       };
 
       // 如果 thumb 有 id，透過 proxy 取得 dataUrl（或 uc fallback）
