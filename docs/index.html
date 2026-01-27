@@ -183,16 +183,11 @@
                 <form id="editForm" class="form-editable">
                     <h3>盤點信息 (可編輯)</h3>
 
-                    <!-- 存放地點 -->
+                    <!-- 存放地點（僅顯示，不可修改） -->
                     <div class="form-group">
-                        <label for="edit-location">存放地點</label>
-                        <input 
-                            type="text" 
-                            id="edit-location" 
-                            class="input-field"
-                            placeholder="輸入存放地點..."
-                        >
-                        <small class="hint">例：辦公室 302 / 倉庫 A 區</small>
+                        <label>存放地點</label>
+                        <div id="edit-location" class="value-display" aria-readonly="true">-</div>
+                        <small class="hint">該欄位僅供顯示，無法編輯</small>
                     </div>
 
                     <!-- 備註 -->

@@ -112,7 +112,8 @@ const ui = {
     document.getElementById('detail-lifespan').textContent = asset.lifespan;
 
     // 填充可編輯字段
-    document.getElementById('edit-location').value = asset.location || '';
+    const locEl = document.getElementById('edit-location');
+    if (locEl) locEl.textContent = asset.location || '';
     document.getElementById('edit-remark').value = asset.remark || '';
     document.getElementById('edit-scrappable').value = asset.scrappable || '';
 
@@ -217,7 +218,8 @@ const ui = {
 
     const assetData = {
       code: this.currentAsset.code,
-      location: document.getElementById('edit-location').value,
+      // location is read-only in the UI; use currentAsset.location (authoritative)
+      location: this.currentAsset && this.currentAsset.location ? this.currentAsset.location : document.getElementById('edit-location') && document.getElementById('edit-location').textContent || '',
       remark: document.getElementById('edit-remark').value,
       scrappable: document.getElementById('edit-scrappable').value,
       photos: this.currentAsset.photos || []
