@@ -350,17 +350,6 @@ const ui = {
     const limitText = limit === 0 ? '無限制' : `最多 ${limit} 張`;
     document.getElementById('photoHint').textContent = `已上傳 ${groups.length} 張 / ${limitText}`;
   },
-      } else {
-        img.classList.add('broken');
-      }
-    });
-
-    // 更新照片計數
-    const limit = app.config.photoLimit;
-    const limitText = limit === 0 ? '無限制' : `最多 ${limit} 張`;
-    document.getElementById('photoHint').textContent = 
-      `已上傳 ${photos.length} 張 / ${limitText}`;
-  },
 
   /**
    * 查看照片
