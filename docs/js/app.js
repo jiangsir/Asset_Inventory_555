@@ -56,17 +56,6 @@ const app = {
       console.warn('UI 模組未就緒 — 詳情請查看載入順序或 script 錯誤');
     }
 
-    // 確保頁面載入時把焦點放到輸入框（立即 focus 並有短 delay 的 fallback，處理不同瀏覽器行為）
-    try {
-      const el = document.getElementById('assetCodeInput');
-      if (el) {
-        el.focus({ preventScroll: true });
-        el.select && el.select();
-        // fallback for browsers that delay focus on load
-        setTimeout(() => { try { el.focus({ preventScroll: true }); el.select && el.select(); } catch(e){} }, 120);
-      }
-    } catch (e) { console.debug('focus assetCodeInput failed', e); }
-
     console.log('應用初始化完成');
   },
 
