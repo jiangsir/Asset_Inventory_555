@@ -31,7 +31,8 @@ const dataManager = {
       request.onsuccess = () => {
         this.db = request.result;
         console.log('IndexedDB 初始化成功');
-        resolve();
+        // 若 IndexedDB 尚無 recent 記錄但 localStorage 有備份，嘗試回補
+        this._reconcileRecentBackup().catch(err => console.debug('reconcileRecentBackup error', err)).finally(() => resolve());
       };
 
       request.onupgradeneeded = (event) => {
@@ -65,6 +66,8 @@ const dataManager = {
 
     // 添加查詢時間戳
     asset.queryTime = new Date().toISOString();
+    // 立刻做 localStorage 備份（避免頁面快速刷新時遺失）
+    try { this._saveRecentBackup(asset); } catch (e) { /* ignore */ }
 
     const request = store.put(asset);
 
@@ -74,6 +77,7 @@ const dataManager = {
 
     request.onsuccess = () => {
       console.log('已添加到最近查詢:', asset.code);
+      try { this._saveRecentBackup(asset); } catch (e) { console.debug('saveRecentBackup failed', e); }
       this.updateRecentList();
     };
   },
@@ -93,11 +97,21 @@ const dataManager = {
 
       request.onsuccess = () => {
         // 按查詢時間排序並限制數量
-        const results = request.result
-          .sort((a, b) => new Date(b.queryTime) - new Date(a.queryTime))
-          .slice(0, limit);
+        const dbResults = request.result
+          .sort((a, b) => new Date(b.queryTime) - new Date(a.queryTime));
 
-        resolve(results);
+        if (dbResults.length > 0) {
+          resolve(dbResults.slice(0, limit));
+          return;
+        }
+
+        // DB 無資料 → 嘗試從 localStorage 的備份回退
+        try {
+          const backup = this._loadRecentFromBackup() || [];
+          resolve(backup.slice(0, limit));
+        } catch (e) {
+          resolve([]);
+        }
       };
     });
   },
@@ -123,6 +137,69 @@ const dataManager = {
         </div>
       `)
       .join('');
+  },
+
+  /**
+   * 本地備份：把最近查詢用一個輕量快照寫入 localStorage（同步、可靠）
+   * 備份格式：[{ code, name, unit, queryTime }, ...]
+   */
+  _saveRecentBackup: function(asset, maxItems = 20) {
+    try {
+      const key = 'recent_backup_v1';
+      const raw = localStorage.getItem(key);
+      let arr = raw ? JSON.parse(raw) : [];
+      // 移除同 code 的舊項
+      arr = arr.filter(a => String(a.code) !== String(asset.code));
+      arr.unshift({ code: asset.code, name: asset.name || '', unit: asset.unit || '', queryTime: asset.queryTime || new Date().toISOString() });
+      arr = arr.slice(0, maxItems);
+      localStorage.setItem(key, JSON.stringify(arr));
+    } catch (e) {
+      console.debug('[dataManager] saveRecentBackup failed', e);
+    }
+  },
+
+  _loadRecentFromBackup: function() {
+    try {
+      const key = 'recent_backup_v1';
+      const raw = localStorage.getItem(key);
+      if (!raw) return [];
+      return JSON.parse(raw);
+    } catch (e) {
+      console.debug('[dataManager] loadRecentFromBackup failed', e);
+      return [];
+    }
+  },
+
+  _reconcileRecentBackup: async function() {
+    // 若 recent store 為空且 localStorage 有備份，將備份回寫到 IndexedDB
+    try {
+      const txn = this.db.transaction([this.STORES.recent], 'readonly');
+      const store = txn.objectStore(this.STORES.recent);
+      const req = store.getAll();
+      const results = await new Promise((resolve, reject) => {
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+      });
+
+      if (results && results.length > 0) return; // DB 已有資料，不需回補
+
+      const backup = this._loadRecentFromBackup();
+      if (!backup || backup.length === 0) return;
+
+      const wtxn = this.db.transaction([this.STORES.recent], 'readwrite');
+      const wstore = wtxn.objectStore(this.STORES.recent);
+      backup.forEach(item => {
+        try { wstore.put(item); } catch (e) { /* ignore single item errors */ }
+      });
+
+      await new Promise((resolve, reject) => {
+        wtxn.oncomplete = () => resolve();
+        wtxn.onerror = () => reject(wtxn.error);
+      });
+      console.log('[dataManager] recent store reconciled from localStorage backup');
+    } catch (e) {
+      console.debug('[dataManager] reconcileRecentBackup error', e);
+    }
   },
 
   /**
