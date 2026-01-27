@@ -50,10 +50,14 @@ const ui = {
       recentContainer.addEventListener('click', (ev) => {
         try {
           let el = ev.target;
-          while (el && !el.classList.contains('item-card')) el = el.parentElement;
+          // 向上尋找最近的元素節點，確保使用 classList 前存在該屬性
+          while (el && !(el.classList && el.classList.contains && el.classList.contains('item-card'))) {
+            el = el.parentElement;
+          }
           if (!el) return;
-          const code = el.getAttribute('data-code') || (el.dataset && el.dataset.code);
+          const code = el.getAttribute && el.getAttribute('data-code') || (el.dataset && el.dataset.code);
           if (!code) return;
+          console.debug('[ui] recent item clicked code=', code);
           if (window.app && typeof app.queryAsset === 'function') {
             app.queryAsset(code);
           }
