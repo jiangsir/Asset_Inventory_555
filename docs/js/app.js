@@ -49,12 +49,8 @@ const app = {
     // 綁定事件監聽器
     this.bindEventListeners();
 
-    // 顯示掃描界面（若 ui 可用）
-    if (typeof ui !== 'undefined' && ui && typeof ui.showScreen === 'function') {
-      ui.showScreen('scanSection');
-    } else {
-      console.warn('UI 模組未就緒 — 詳情請查看載入順序或 script 錯誤');
-    }
+    // 顯示掃描界面
+    ui.showScreen('scanSection');
 
     console.log('應用初始化完成');
   },
