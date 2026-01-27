@@ -489,8 +489,28 @@ const ui = {
    * 載入最近查詢的資產
    */
   loadRecentAssets: async function() {
+    // 1) 立即嘗試從 localStorage 備份同步顯示，確保 F5 時不會出現空白畫面
     try {
-      let assets = await dataManager.getRecentAssets(6);
+      const backup = (dataManager && typeof dataManager._loadRecentFromBackup === 'function')
+        ? dataManager._loadRecentFromBackup()
+        : [];
+      if (backup && backup.length) {
+        this.displayRecentAssets(backup.slice(0, 6));
+        console.debug('[recent] rendered from local backup');
+      }
+    } catch (e) {
+      console.debug('[recent] render backup failed', e);
+    }
+
+    // 2) 非同步載入正式來源（IndexedDB -> fallback -> 後端回填），並在可用時更新 UI
+    try {
+      let assets = [];
+      try {
+        assets = await dataManager.getRecentAssets(6);
+      } catch (e) {
+        console.debug('[recent] getRecentAssets failed, will rely on backup', e);
+        assets = [];
+      }
 
       // 智能回填：若 local recent 條目缺少 model 或 location，且非離線模式，
       // 嘗試向後端請求最新的 asset（僅對顯示的前 N 筆進行，避免大量網路呼叫）
@@ -501,7 +521,7 @@ const ui = {
           .slice(0, 6);
 
         if (!app.config.offlineMode && toBackfill.length > 0 && sheetApi && sheetApi.getAsset) {
-          await Promise.all(toBackfill.map(async (item, idx) => {
+          await Promise.all(toBackfill.map(async (item) => {
             try {
               const res = await sheetApi.getAsset(item.code);
               if (res && res.success && res.asset) {
@@ -523,7 +543,10 @@ const ui = {
         console.debug('recent backfill inner error', e);
       }
 
-      this.displayRecentAssets(assets);
+      // 最終更新 UI（僅在有正式資料時覆蓋 backup 顯示）
+      if (assets && assets.length) {
+        this.displayRecentAssets(assets);
+      }
     } catch (error) {
       console.error('載入最近查詢失敗:', error);
     }
