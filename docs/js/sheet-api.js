@@ -86,13 +86,42 @@ const sheetApi = {
         });
       }
 
-      // 設置超時
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-      options.signal = controller.signal;
+      // 非破壞性 debug：印出 url 與 options（避免敏感資料）
+      try {
+        console.debug('[API request] url=', url);
+        // shallow copy options for logging, avoid logging large bodies like photoBase64
+        const safeOptions = Object.assign({}, options);
+        if (safeOptions.body && typeof safeOptions.body === 'string' && safeOptions.body.length > 300) {
+          safeOptions.body = `[string ${safeOptions.body.length} chars]`;
+        }
+        if (safeOptions.body instanceof FormData) {
+          safeOptions.body = '[FormData]';
+        }
+        console.debug('[API request] options=', safeOptions);
+      } catch (e) { /* ignore debug logging errors */ }
 
-      const response = await fetch(url, options);
-      clearTimeout(timeoutId);
+      // 簡單重試機制（最多嘗試 2 次：初次 + 1 次重試），每次會重建 AbortController
+      const MAX_ATTEMPTS = 2;
+      let attempt = 0;
+      let response = null;
+      while (attempt < MAX_ATTEMPTS) {
+        attempt++;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+        options.signal = controller.signal;
+
+        try {
+          response = await fetch(url, options);
+          clearTimeout(timeoutId);
+          break; // 成功，跳出重試
+        } catch (err) {
+          clearTimeout(timeoutId);
+          console.warn(`[API request] fetch attempt ${attempt} failed`, err);
+          // 如果是最後一次嘗試，拋出錯誤讓外層 catch 處理；否則等待短暫時間再重試
+          if (attempt >= MAX_ATTEMPTS) throw err;
+          await new Promise(r => setTimeout(r, 250 * attempt));
+        }
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
