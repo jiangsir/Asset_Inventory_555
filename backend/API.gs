@@ -125,6 +125,7 @@ function handleGetAsset(assetCode) {
       return sendResponse({
         success: true,
         asset: assetResult.asset,
+        sheetName: assetResult.sheetName,
         debug: {
           action: 'getAsset',
           sheetName: assetResult.sheetName,
@@ -137,6 +138,7 @@ function handleGetAsset(assetCode) {
       return sendResponse({
         success: false,
         error: `未找到該編號(${assetCode})的財產`,
+        sheetName: assetResult.sheetName,
         debug: {
           action: 'getAsset',
           sheetName: assetResult.sheetName,
