@@ -322,9 +322,10 @@ const ui = {
       img.setAttribute('role', 'button');
 
       const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
       removeBtn.className = 'photo-remove';
       removeBtn.textContent = '✕';
-      removeBtn.onclick = () => ui.removePhoto(idx);
+      removeBtn.onclick = (ev) => { ev.preventDefault(); ev.stopPropagation(); ui.removePhoto(idx); };
 
       div.appendChild(img);
       div.appendChild(removeBtn);
