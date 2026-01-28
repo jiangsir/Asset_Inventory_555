@@ -74,6 +74,32 @@ const ui = {
         }
       });
     }
+
+    // Always keep focus on scan input when scan screen is active.
+    const ensureScanFocus = (ev) => {
+      try {
+        const scanScreen = document.getElementById('scanSection');
+        if (!scanScreen || !scanScreen.classList.contains('active')) return;
+        const input = document.getElementById('assetCodeInput');
+        if (!input) return;
+        if (document.activeElement === input) return;
+        if (ev && ev.target === input) return;
+        // Defer focus to avoid interrupting click handlers.
+        setTimeout(() => {
+          if (scanScreen.classList.contains('active')) input.focus();
+        }, 0);
+      } catch (e) {
+        console.debug('[ui] ensureScanFocus error', e);
+      }
+    };
+
+    window.addEventListener('focus', ensureScanFocus);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) ensureScanFocus();
+    });
+    document.addEventListener('click', ensureScanFocus);
+    document.addEventListener('touchend', ensureScanFocus, { passive: true });
+    document.addEventListener('keydown', ensureScanFocus);
   },
 
   /**
@@ -89,6 +115,11 @@ const ui = {
     const screen = document.getElementById(screenId);
     if (screen) {
       screen.classList.add('active');
+    }
+
+    if (screenId === 'scanSection') {
+      const input = document.getElementById('assetCodeInput');
+      if (input) setTimeout(() => input.focus(), 0);
     }
   },
 
