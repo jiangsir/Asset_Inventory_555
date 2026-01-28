@@ -592,6 +592,8 @@ const ui = {
         if (res && res.error === 'file_too_large_for_inline_preview') {
           const driveUrl = 'https://drive.google.com/uc?export=view&id=' + mapEntry.fullId;
           preview.dataset.fallbackLink = driveUrl;
+          // 嘗試直接以 Drive 連結顯示原圖（若權限允許）
+          try { preview.src = driveUrl; } catch (e) { /* ignore */ }
           try {
             const externalLink = document.getElementById('photoExternalLink');
             if (externalLink) {
