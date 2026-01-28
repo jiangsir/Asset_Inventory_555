@@ -245,6 +245,19 @@ const ui = {
     const gallery = document.getElementById('photoGallery');
     gallery.innerHTML = '';
 
+    // Normalize incoming photos: accept strings (URL or data:) or objects
+    photos = (photos || []).map(p => {
+      if (!p) return {};
+      if (typeof p === 'string') {
+        return { url: p };
+      }
+      // sometimes server returns plain base64 string
+      if (p && typeof p === 'object' && !p.url && p.dataUrl && typeof p.dataUrl === 'string') {
+        return { dataUrl: p.dataUrl };
+      }
+      return p;
+    });
+
     // 簡單快取，避免重複向後端請求相同縮圖
     this._photoCache = this._photoCache || {};
     // 用於 map 前端顯示索引 -> 實際 photo id(s)
@@ -256,17 +269,18 @@ const ui = {
 
     const normalizeBase = (p) => {
       if (!p) return null;
+      const url = (typeof p === 'string') ? p : (p.url || p.dataUrl || p.src || '');
       if (p.name) return String(p.name).replace(/_thumb(?=\.[a-z]+$)/i, '').replace(/-thumb(?=\.[a-z]+$)/i, '');
       // 如果是 Google Drive 的分享連結，嘗試抽出 fileId 作為 base
-      if (p.url && /drive\.google\.com/.test(p.url)) {
-        try {
-          const m = p.url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+      try {
+        if (url && /drive\.google\.com/.test(url)) {
+          const m = String(url).match(/\/d\/([a-zA-Z0-9_-]+)/) || String(url).match(/[?&]id=([a-zA-Z0-9_-]+)/);
           if (m && m[1]) return `drive:${m[1]}`;
-        } catch (e) { /* ignore */ }
-      }
+        }
+      } catch (e) { /* ignore */ }
       // fallback: try URL but strip query string and thumb suffix
-      if (p.url) {
-        const noQuery = String(p.url).split('?')[0];
+      if (url) {
+        const noQuery = String(url).split('?')[0];
         return noQuery.replace(/_thumb(?=\.[a-z]+$)/i, '').replace(/-thumb(?=\.[a-z]+$)/i, '');
       }
       return p.id || null;
@@ -369,7 +383,7 @@ const ui = {
         const tried = new Set();
         let idx = 0;
 
-        const tryNext = () => {
+        const tryNext = async () => {
           if (idx >= candidates.length) {
             img.classList.add('broken');
             img.onerror = null;
@@ -378,19 +392,46 @@ const ui = {
           const url = candidates[idx++];
           if (!url || tried.has(url)) return tryNext();
           tried.add(url);
+
           // assign onerror to try next candidate when current fails
           img.onerror = () => {
             console.debug('[photo] thumbnail load failed, trying next fallback', url);
-            // small delay to allow browser state settle
-            setTimeout(tryNext, 50);
+            setTimeout(() => { tryNext(); }, 50);
           };
+
           try {
             // Normalize Google Drive share links to direct UC links for embedding
             let normalizedUrl = url;
             try {
-              const m = String(url).match(/\/d\/([a-zA-Z0-9_-]+)/);
+              const m = String(url).match(/\/d\/([a-zA-Z0-9_-]+)/) || String(url).match(/[?&]id=([a-zA-Z0-9_-]+)/);
               if (m && m[1]) normalizedUrl = 'https://drive.google.com/uc?export=view&id=' + m[1];
             } catch (e) { /* ignore */ }
+
+            // If it's a data URL, assign directly
+            if (/^data:/i.test(normalizedUrl)) {
+              img.src = normalizedUrl;
+              return;
+            }
+
+            // Try fetching the resource as blob (better chance to bypass embedded page wrappers)
+            try {
+              const resp = await fetch(normalizedUrl, { method: 'GET', mode: 'cors' });
+              if (resp && resp.ok) {
+                const ct = resp.headers.get('content-type') || '';
+                if (ct.startsWith('image/')) {
+                  const blob = await resp.blob();
+                  const objectUrl = URL.createObjectURL(blob);
+                  img.onload = () => { setTimeout(() => URL.revokeObjectURL(objectUrl), 2000); };
+                  img.src = objectUrl;
+                  return;
+                }
+              }
+            } catch (fetchErr) {
+              // fetch might fail due to CORS or permission; we'll fallback to direct assignment
+              console.debug('[photo] fetch-as-blob failed, fallback to direct src', fetchErr, normalizedUrl);
+            }
+
+            // final attempt: assign normalized URL as src (may work if embeddable)
             img.src = normalizedUrl;
           } catch (e) {
             console.debug('[photo] set src exception', e, url);
