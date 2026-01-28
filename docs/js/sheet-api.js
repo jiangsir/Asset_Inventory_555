@@ -130,11 +130,9 @@ const sheetApi = {
       const result = await response.json();
       
       // 無論如何都打印完整的 API 響應
-      console.log('%c━━━ [API RESPONSE] ━━━', 'color: #ff0000; font-weight: bold; font-size: 14px; background: #ffeeee; padding: 5px;');
       console.log('%cAction:', 'color: #ff0000; font-weight: bold', action);
       console.log('%cFull Response:', 'color: #ff0000; font-weight: bold', result);
       console.log('%cDebug Info:', 'color: #0066cc; font-weight: bold', result.debug || 'NO DEBUG INFO');
-      console.log('%c━━━━━━━━━━━━━━━━━━━', 'color: #ff0000; font-weight: bold; font-size: 14px; background: #ffeeee; padding: 5px;');
       
       return result;
 

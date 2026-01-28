@@ -16,7 +16,7 @@
     <!-- 頂部導航 -->
     <nav class="navbar">
         <div class="navbar-brand">
-            <h1>📦 財產盤點系統 555 fix: 最近查詢要可以點擊#3</h1>
+            <h1>📦 財產盤點系統 555 fix: 最近查詢要可以點擊#4</h1>
         </div>
         <div class="navbar-menu">
             <button id="syncBtn" class="btn-icon" title="同步數據" onclick="ui.syncData()">
@@ -108,7 +108,7 @@
                                                     if (!container) return;
                                                     // 如果 app 已經渲染 recent，就不覆蓋
                                                     if (container.children && container.children.length) return;
-                                                    container.innerHTML = items.slice(0,6).map(asset => `\n                            <div class="item-card" data-code="${asset.code}" onclick="(window.app&&app.queryAsset)?app.queryAsset('${asset.code}'):null">\n                              <div class="item-card-code">${asset.code}</div>\n                              <div class="item-card-name">${(asset.model||asset.name)||''}</div>\n                              <div class="item-card-unit">${(asset.location||asset.unit)||''}</div>\n                            </div>\n                          `).join('');
+                                                    container.innerHTML = items.slice(0,6).map(asset => `\n                            <div class="item-card" data-code="${asset.code}" onclick="console.log('[recent] inline-backup click', '${asset.code}'); (window.app&&app.queryAsset)?app.queryAsset('${asset.code}', { force: true, source: 'recent-inline-backup' }):null">\n                              <div class="item-card-code">${asset.code}</div>\n                              <div class="item-card-name">${(asset.model||asset.name)||''}</div>\n                              <div class="item-card-unit">${(asset.location||asset.unit)||''}</div>\n                            </div>\n                          `).join('');
                                                     console.debug('[inline-recent] rendered from local backup', items.length);
                                                 } catch (e) {
                                                     console.debug('[inline-recent] failed', e);
