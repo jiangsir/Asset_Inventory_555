@@ -50,16 +50,24 @@ const ui = {
       recentContainer.addEventListener('click', (ev) => {
         try {
           let el = ev.target;
-          // 向上尋找最近的元素節點，確保使用 classList 前存在該屬性
-          while (el && !(el.classList && el.classList.contains && el.classList.contains('item-card'))) {
-            el = el.parentElement;
+          if (el && el.closest) {
+            el = el.closest('.item-card');
+          } else {
+            // 向上尋找最近的元素節點，確保使用 classList 前存在該屬性
+            while (el && !(el.classList && el.classList.contains && el.classList.contains('item-card'))) {
+              el = el.parentElement;
+            }
           }
           if (!el) return;
-          const code = el.getAttribute && el.getAttribute('data-code') || (el.dataset && el.dataset.code);
+          let code = (el.getAttribute && el.getAttribute('data-code')) || (el.dataset && el.dataset.code);
+          if (!code) {
+            const codeEl = el.querySelector && el.querySelector('.item-card-code');
+            code = codeEl ? codeEl.textContent.trim() : '';
+          }
           if (!code) return;
           console.debug('[ui] recent item clicked code=', code);
           if (window.app && typeof app.queryAsset === 'function') {
-            app.queryAsset(code);
+            app.queryAsset(code, { force: true, source: 'recent' });
           }
         } catch (e) {
           console.debug('[ui] recent click handler error', e);
@@ -896,3 +904,8 @@ const ui = {
     }
   }
 };
+
+// Ensure ui is available on window so app._ensureAndInit can find it.
+if (typeof window !== 'undefined') {
+  window.ui = ui;
+}
