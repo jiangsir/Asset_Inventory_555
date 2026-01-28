@@ -246,14 +246,29 @@ const ui = {
     gallery.innerHTML = '';
 
     // Normalize incoming photos: accept strings (URL or data:) or objects
+    const extractDriveId = (url) => {
+      if (!url) return null;
+      try {
+        const m = String(url).match(/\/d\/([a-zA-Z0-9_-]+)/) || String(url).match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        return m && m[1] ? m[1] : null;
+      } catch (e) {
+        return null;
+      }
+    };
+
     photos = (photos || []).map(p => {
       if (!p) return {};
       if (typeof p === 'string') {
-        return { url: p };
+        const id = extractDriveId(p);
+        return id ? { url: p, id } : { url: p };
       }
       // sometimes server returns plain base64 string
       if (p && typeof p === 'object' && !p.url && p.dataUrl && typeof p.dataUrl === 'string') {
         return { dataUrl: p.dataUrl };
+      }
+      if (p && typeof p === 'object' && p.url && !p.id) {
+        const id = extractDriveId(p.url || p.webViewLink);
+        if (id) p.id = id;
       }
       return p;
     });
