@@ -468,6 +468,11 @@ const app = {
   }
 };
 
+// Expose app globally for inline handlers and diagnostics.
+if (typeof window !== 'undefined') {
+  window.app = app;
+}
+
 // ============================================
 // 應用啟動
 // ============================================
