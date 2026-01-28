@@ -96,6 +96,9 @@ const ui = {
    * 返回掃描界面
    */
   backToScan: function() {
+    if (window.app && typeof app.cancelPendingQuery === 'function') {
+      app.cancelPendingQuery();
+    }
     this.showScreen('scanSection');
     document.getElementById('assetCodeInput').value = '';
     document.getElementById('assetCodeInput').focus();

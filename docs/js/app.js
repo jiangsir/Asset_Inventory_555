@@ -21,6 +21,8 @@ const app = {
     photoLimit: 10,
     debug: false
   },
+  _querySeq: 0,
+  _activeQueryId: null,
 
   /**
    * 初始化應用
@@ -227,6 +229,8 @@ const app = {
     }
     this._lastQueryCode = code;
     this._lastQueryTime = Date.now();
+    const queryId = ++this._querySeq;
+    this._activeQueryId = queryId;
 
     ui.showLoading('正在查詢財產...');
     console.log('%c━━ 【查詢財產】━━', 'color: #ff6600; font-weight: bold; font-size: 13px; background: #fff5e6; padding: 5px;');
@@ -236,8 +240,10 @@ const app = {
       const asset = await sheetApi.getAsset(code);
       console.log('%c查詢結果:', 'color: #ff6600; font-weight: bold', asset.success ? '找到' : '未找到');
       console.log('%c完整結果對象:', 'color: #ff6600; font-weight: bold', asset);
-      console.log('%c━━━━━━━━━━━━', 'color: #ff6600; font-weight: bold; font-size: 13px; background: #fff5e6; padding: 5px;');
 
+      if (this._activeQueryId !== queryId) {
+        return;
+      }
       if (asset.success) {
         // 把 wrapper-level 的 sheetName 注入到實際 asset 物件（後端把 sheetName 放在 response 層）
         const fetched = asset.asset || {};
@@ -259,6 +265,11 @@ const app = {
     }
   },
 
+  cancelPendingQuery: function() {
+    this._activeQueryId = null;
+    this._querySeq += 1;
+  },
+
   /**
    * 顯示搜索建議
    */
@@ -269,7 +280,6 @@ const app = {
       const results = await sheetApi.searchAssets(query);
       console.log('%c搜索結果:', 'color: #ff6600; font-weight: bold', `找到 ${results.results?.length || 0} 個結果`);
       console.log('%c完整結果對象:', 'color: #ff6600; font-weight: bold', results);
-      console.log('%c━━━━━━━━━━━━', 'color: #ff6600; font-weight: bold; font-size: 13px; background: #fff5e6; padding: 5px;');
 
       if (results.success && results.results.length > 0) {
         const suggestionsDiv = document.getElementById('searchSuggestions');
