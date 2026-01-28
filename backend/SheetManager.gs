@@ -224,6 +224,9 @@ const SheetManager = {
       }
     }
 
+    const rawPhotos = this.parsePhotos(photosCells.length === 1 ? photosCells[0] : photosCells);
+    const enrichedPhotos = this.enrichPhotosMeta(rawPhotos);
+
     return {
       rowIndex: rowIndex + 1, // 1-based for Spreadsheet
       code: String(row[this.COLUMNS.B.index] || ''),
@@ -238,7 +241,7 @@ const SheetManager = {
       location: String(row[this.COLUMNS.J.index] || ''),
       remark: String(row[this.COLUMNS.K.index] || ''),
       scrappable: String(row[this.COLUMNS.L.index] || ''),
-      photos: this.parsePhotos(photosCells.length === 1 ? photosCells[0] : photosCells),
+      photos: enrichedPhotos,
       editTime: row[this.COLUMNS.N.index] || ''
     };
   },
@@ -279,6 +282,64 @@ const SheetManager = {
     } catch(e) {
       Logger.log('照片解析錯誤: ' + e);
       return [];
+    }
+  },
+
+  /**
+   * Try to enrich photos from Drive metadata when only URL is present.
+   * Adds id/name/mimeType/size when possible. Safe to call on arrays.
+   */
+  enrichPhotosMeta: function(photos) {
+    try {
+      if (!Array.isArray(photos)) return [];
+      this.__driveMetaCache = this.__driveMetaCache || {};
+
+      return photos.map(p => {
+        let item = p;
+        if (!item) return {};
+        if (typeof item === 'string') item = { url: item };
+
+        const url = item.url || item.webViewLink || '';
+        let id = item.id;
+        if (!id) id = this.inferDriveIdFromUrl(url);
+        if (!id) return item;
+
+        item.id = id;
+        if (item.name && item.mimeType && item.size) return item;
+
+        if (this.__driveMetaCache[id]) {
+          return Object.assign({}, item, this.__driveMetaCache[id]);
+        }
+
+        try {
+          const f = DriveApp.getFileById(id);
+          const meta = {
+            id: id,
+            name: f.getName(),
+            mimeType: f.getMimeType(),
+            size: f.getSize(),
+            url: item.url || f.getUrl()
+          };
+          this.__driveMetaCache[id] = meta;
+          return Object.assign({}, item, meta);
+        } catch (e) {
+          return item;
+        }
+      });
+    } catch (e) {
+      Logger.log('[enrichPhotosMeta] error: ' + e);
+      return Array.isArray(photos) ? photos : [];
+    }
+  },
+
+  inferDriveIdFromUrl: function(url) {
+    try {
+      if (!url) return null;
+      const s = String(url);
+      const m = s.match(/\/d\/([a-zA-Z0-9_-]+)/) || s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      return m && m[1] ? m[1] : null;
+    } catch (e) {
+      return null;
     }
   },
 
