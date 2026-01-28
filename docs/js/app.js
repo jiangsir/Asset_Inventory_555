@@ -359,7 +359,7 @@ const app = {
     return Math.ceil((withoutPrefix.length * 3)/4) - padding;
   },
 
-  // ======== Upload with thumbnail-first + parallel chunking ========
+  // ======== Upload with resize-to-500 + single upload ========
   uploadPhoto: async function(photoBase64, fileName = null, onProgress = null) {
     ui.showLoading('正在上傳照片...');
 
@@ -387,45 +387,23 @@ const app = {
     try {
       const code = ui.currentAsset && ui.currentAsset.code;
 
-      // 1) 產生縮圖 (快速顯示)，先上傳並 attach 到資產
+      // 1) ????? > 500px?????? 500px????? 500px ???
+      const dataUrl = photoBase64.indexOf('data:') === 0 ? photoBase64 : ('data:image/jpeg;base64,' + photoBase64);
       try {
-        const dataUrl = photoBase64.indexOf('data:') === 0 ? photoBase64 : ('data:image/jpeg;base64,' + photoBase64);
-        const thumb = await this.resizeDataUrl(dataUrl, 400, 0.7);
-        const thumbB64 = thumb.split(',')[1];
-
-        // 上傳縮圖（小檔走單次請求），並立即 attach 以便在 sheet 顯示
-        const thumbRes = await sheetApi.uploadPhoto({ code, photoBase64: thumbB64, photoName: (fileName||'photo') + '_thumb.jpg', meta: { isThumbnail: true } });
-        if (thumbRes && thumbRes.success && thumbRes.photo && thumbRes.photo.id) {
-          // 嘗試把縮圖附加到 asset（server-side attach helper）
-          await sheetApi.repairAttach(code, thumbRes.photo.id);
-          // 立即在 UI 顯示（optimistic update）
-          ui.currentAsset = ui.currentAsset || {};
-          ui.currentAsset.photos = ui.currentAsset.photos || [];
-          ui.currentAsset.photos.unshift({ id: thumbRes.photo.id, url: thumbRes.photo.url, name: thumbRes.photo.name });
-          ui.displayPhotos(ui.currentAsset.photos);
-        }
-      } catch (thumbErr) {
-        console.warn('thumbnail upload failed', thumbErr);
-      }
-
-      // 2) 如果原檔很大，先嘗試壓縮成合理大小再上傳 full image
-      const estimated = this.estimateBytesFromBase64(photoBase64);
-      if (estimated > (2.4 * 1024 * 1024)) {
-        try {
-          const dataUrl = photoBase64.indexOf('data:') === 0 ? photoBase64 : ('data:image/jpeg;base64,' + photoBase64);
-          const resized = await this.resizeDataUrl(dataUrl, 1600, 0.78);
+        const dims = await this.getImageDimensions(dataUrl);
+        if (dims && dims.width && dims.width > 500) {
+          const resized = await this.resizeDataUrl(dataUrl, 500, 0.78);
           photoBase64 = resized.split(',')[1];
-        } catch (e) {
-          console.warn('full-image resize failed, uploading original', e);
+        } else if (dataUrl.indexOf('base64,') > 0) {
+          photoBase64 = dataUrl.split(',')[1];
         }
+      } catch (e) {
+        console.warn('resize-to-500 failed, uploading original', e);
+        if (dataUrl.indexOf('base64,') > 0) photoBase64 = dataUrl.split(',')[1];
       }
 
-      // 3) 以並行分片上傳 full image（uploadPhoto 內會選擇 chunked 路徑）
-      const result = await sheetApi.uploadPhoto({ code, photoBase64, photoName: fileName, meta: { originalSize: estimated || null } }, (pct, uploadedParts, totalParts) => {
-        // progress callback
-        try { ui.showUploadProgress(pct); } catch(e){ console.log('progress', pct); }
-        if (typeof onProgress === 'function') onProgress(pct, uploadedParts, totalParts);
-      });
+      // 2) ????? chunking??????????????/?????
+      const result = await sheetApi.request('uploadPhoto', 'POST', { code, photoBase64, photoName: fileName });
 
       if (result && result.success) {
         ui.showNotification('success', '上傳成功', '照片已保存');
