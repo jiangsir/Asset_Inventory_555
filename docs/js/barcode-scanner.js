@@ -277,11 +277,17 @@ const camera = {
         confirmBtn.disabled = false;
         confirmBtn.removeAttribute('aria-disabled');
       }
+      if (window.ui && typeof ui.updatePhotoPreviewMeta === 'function') {
+        ui.updatePhotoPreviewMeta(preview);
+      }
     };
     preview.onerror = () => {
       if (confirmBtn) {
         confirmBtn.disabled = true;
         confirmBtn.setAttribute('aria-disabled', 'true');
+      }
+      if (window.ui && typeof ui.clearPhotoPreviewMeta === 'function') {
+        ui.clearPhotoPreviewMeta();
       }
     };
 
@@ -469,6 +475,9 @@ const camera = {
     const modal = document.getElementById('photoModal');
     modal.style.display = 'none';
     this.capturedPhoto = null;
+    if (window.ui && typeof ui.clearPhotoPreviewMeta === 'function') {
+      ui.clearPhotoPreviewMeta();
+    }
   },
 
   /**

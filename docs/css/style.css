@@ -774,6 +774,14 @@ select {
     margin: 0;
 }
 
+.photo-meta {
+    font-size: 0.85rem;
+    color: #b7c6d3;
+    margin-left: auto;
+    margin-right: var(--spacing-sm);
+    white-space: nowrap;
+}
+
 .modal-body {
     flex: 1;
     padding: var(--spacing-md);

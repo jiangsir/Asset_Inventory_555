@@ -537,6 +537,10 @@ const ui = {
   viewPhoto: function(url) {
     const modal = document.getElementById('photoModal');
     const preview = document.getElementById('photoPreview');
+    this.clearPhotoPreviewMeta();
+    preview.onload = () => {
+      this.updatePhotoPreviewMeta(preview);
+    };
     preview.src = url;
     modal.style.display = 'flex';
   },
@@ -548,6 +552,10 @@ const ui = {
   viewPhotoFull: async function(mapEntry = {}, servedAsThumbnail = false) {
     const modal = document.getElementById('photoModal');
     const preview = document.getElementById('photoPreview');
+    this.clearPhotoPreviewMeta();
+    preview.onload = () => {
+      this.updatePhotoPreviewMeta(preview);
+    };
 
     // 先用 thumbnail 作為 placeholder（若有）
     if (mapEntry.thumbId) {
@@ -617,6 +625,31 @@ const ui = {
     // 最後回退：如果只有縮圖，已經顯示縮圖；若什麼都沒有，顯示破圖標示
     if (!preview.src) {
       preview.classList.add('broken');
+    }
+  },
+
+  updatePhotoPreviewMeta: function(previewEl) {
+    try {
+      const meta = document.getElementById('photoPreviewMeta');
+      if (!meta) return;
+      if (!previewEl || !previewEl.naturalWidth || !previewEl.naturalHeight) {
+        meta.textContent = '';
+        return;
+      }
+      const w = previewEl.naturalWidth;
+      const h = previewEl.naturalHeight;
+      meta.textContent = `尺寸 ${w} x ${h}`;
+    } catch (e) {
+      console.debug('updatePhotoPreviewMeta error', e);
+    }
+  },
+
+  clearPhotoPreviewMeta: function() {
+    try {
+      const meta = document.getElementById('photoPreviewMeta');
+      if (meta) meta.textContent = '';
+    } catch (e) {
+      console.debug('clearPhotoPreviewMeta error', e);
     }
   },
 
