@@ -218,9 +218,10 @@ const app = {
   /**
    * 查詢財產
    */
-  queryAsset: async function(code) {
+  queryAsset: async function(code, opts = {}) {
+    const options = opts || {};
     // 去重：防止條碼機短時間內多次觸發同一個查詢
-    if (this._lastQueryCode === code && this._lastQueryTime && Date.now() - this._lastQueryTime < 1000) {
+    if (!options.force && this._lastQueryCode === code && this._lastQueryTime && Date.now() - this._lastQueryTime < 1000) {
       console.debug('[queryAsset] 忽略重複查詢:', code);
       return;
     }
