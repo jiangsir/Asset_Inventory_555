@@ -780,7 +780,7 @@ const ui = {
 
     container.innerHTML = assets
       .map(asset => `
-        <div class="item-card" data-code="${asset.code}">
+        <div class="item-card" data-code="${asset.code}" role="button" tabindex="0" onclick="(window.app&&app.queryAsset)?app.queryAsset('${asset.code}'):null">
           <div class="item-card-code">${asset.code}</div>
           <div class="item-card-name">${(asset.model || asset.name) || ''}</div>
           <div class="item-card-unit">${(asset.location || asset.unit) || ''}</div>
