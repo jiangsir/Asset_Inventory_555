@@ -324,23 +324,31 @@ const ui = {
     const groups = [];
     const byBase = new Map();
 
+    const driveIdFromUrl = (url) => {
+      try {
+        if (!url) return null;
+        const s = String(url);
+        const m = s.match(/\/d\/([a-zA-Z0-9_-]+)/) || s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        return m && m[1] ? m[1] : null;
+      } catch (e) {
+        return null;
+      }
+    };
+
     const normalizeBase = (p) => {
       if (!p) return null;
       const url = (typeof p === 'string') ? p : (p.url || p.dataUrl || p.src || '');
+      // Prefer stable identifiers (id / Drive fileId) to avoid merging different files with same name
+      if (p.id) return `id:${p.id}`;
+      const driveId = driveIdFromUrl(url);
+      if (driveId) return `drive:${driveId}`;
       if (p.name) return String(p.name).replace(/_thumb(?=\.[a-z]+$)/i, '').replace(/-thumb(?=\.[a-z]+$)/i, '');
-      // 如果是 Google Drive 的分享連結，嘗試抽出 fileId 作為 base
-      try {
-        if (url && /drive\.google\.com/.test(url)) {
-          const m = String(url).match(/\/d\/([a-zA-Z0-9_-]+)/) || String(url).match(/[?&]id=([a-zA-Z0-9_-]+)/);
-          if (m && m[1]) return `drive:${m[1]}`;
-        }
-      } catch (e) { /* ignore */ }
       // fallback: try URL but strip query string and thumb suffix
       if (url) {
         const noQuery = String(url).split('?')[0];
         return noQuery.replace(/_thumb(?=\.[a-z]+$)/i, '').replace(/-thumb(?=\.[a-z]+$)/i, '');
       }
-      return p.id || null;
+      return null;
     };
 
     photos.forEach(p => {
@@ -432,10 +440,14 @@ const ui = {
         // Build fallback candidate list (prioritize provided src)
         const candidates = [];
         if (src) candidates.push(src);
+        const thumbId = (g.thumb && g.thumb.id) ? g.thumb.id : (g.thumb && g.thumb.url ? driveIdFromUrl(g.thumb.url) : null);
+        const fullId = (g.full && g.full.id) ? g.full.id : (g.full && g.full.url ? driveIdFromUrl(g.full.url) : null);
+        if (thumbId) candidates.push('https://drive.google.com/thumbnail?id=' + thumbId + '&sz=w400');
+        if (fullId) candidates.push('https://drive.google.com/thumbnail?id=' + fullId + '&sz=w400');
         if (g.full && g.full.url) candidates.push(g.full.url);
         if (g.thumb && g.thumb.url) candidates.push(g.thumb.url);
-        if (g.full && g.full.id) candidates.push('https://drive.google.com/uc?export=view&id=' + g.full.id);
-        if (g.thumb && g.thumb.id) candidates.push('https://drive.google.com/uc?export=view&id=' + g.thumb.id);
+        if (fullId) candidates.push('https://drive.google.com/uc?export=view&id=' + fullId);
+        if (thumbId) candidates.push('https://drive.google.com/uc?export=view&id=' + thumbId);
 
         const tried = new Set();
         let idx = 0;
@@ -536,23 +548,28 @@ const ui = {
                 return;
               }
 
-              // 最後備援：嘗試使用 Drive 的 uc 連結
+              // 最後備援：先試 Drive thumbnail，再試 uc 連結
+              const thumb = 'https://drive.google.com/thumbnail?id=' + g.thumb.id + '&sz=w400';
               const uc = 'https://drive.google.com/uc?export=view&id=' + g.thumb.id;
-              // 預載測試 uc 是否可用
+              // 預載測試 thumbnail/uc 是否可用
               const testImg = new Image();
               let usedFallback = false;
               testImg.onload = () => {
                 usedFallback = true;
-                this._photoCache[cacheKey] = uc;
-                setThumbSrc(uc, false);
+                this._photoCache[cacheKey] = testImg.src;
+                setThumbSrc(testImg.src, false);
               };
               testImg.onerror = () => {
+                if (!usedFallback && testImg.src !== uc) {
+                  testImg.src = uc;
+                  return;
+                }
                 if (!usedFallback) {
-                  console.debug('[servePhoto] uc fallback failed for id=', g.thumb.id, 'server response=', res);
+                  console.debug('[servePhoto] thumbnail/uc fallback failed for id=', g.thumb.id, 'server response=', res);
                   img.classList.add('broken');
                 }
               };
-              testImg.src = uc;
+              testImg.src = thumb;
             } catch (e) {
               console.warn('servePhoto processing error', e, res);
               img.classList.add('broken');
