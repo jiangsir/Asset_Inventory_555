@@ -122,8 +122,9 @@ const SheetManager = {
         Logger.log(`[getAssetByCode] 第 ${i+1} 行比較: "${cellValue}" === "${code}" ?`);
         if (cellValue === code) {
           Logger.log(`[getAssetByCode] 在 ${sheetName} 找到匹配於第 ${i+1} 行`);
+          const photoCells = this.getPhotoCellsFromSheet(sheet, i + 1, 8);
           return {
-            asset: this.formatAssetData(data[i], i),
+            asset: this.formatAssetData(data[i], i, photoCells || null),
             sheetName: sheetName
           };
         }
@@ -165,7 +166,8 @@ const SheetManager = {
 
         if (code.includes(query) || name.includes(query)) {
           Logger.log(`[searchAssets] Sheet ${sheetName} 第 ${i+1} 行匹配 - 編號: ${code}, 名稱: ${name}`);
-          results.push(this.formatAssetData(data[i], i));
+          const photoCells = this.getPhotoCellsFromSheet(sheet, i + 1, 8);
+          results.push(this.formatAssetData(data[i], i, photoCells || null));
         }
       }
 
@@ -212,15 +214,19 @@ const SheetManager = {
   /**
    * 格式化財產數據為對象
    */
-  formatAssetData: function(row, rowIndex) {
+  formatAssetData: function(row, rowIndex, photosOverride) {
     // collect photos from M and adjacent columns (M,N,O...) to support per-cell images
     const maxCols = 8; // M + up to 7 extra cols
-    const photosCells = [];
-    for (let i = 0; i < maxCols; i++) {
-      const colIdx = this.COLUMNS.M.index + i;
-      if (colIdx < row.length) {
-        const v = row[colIdx];
-        if (v !== undefined && v !== null && String(v).trim() !== '') photosCells.push(v);
+    let photosCells = [];
+    if (photosOverride && Array.isArray(photosOverride)) {
+      photosCells = photosOverride;
+    } else {
+      for (let i = 0; i < maxCols; i++) {
+        const colIdx = this.COLUMNS.M.index + i;
+        if (colIdx < row.length) {
+          const v = row[colIdx];
+          if (v !== undefined && v !== null && String(v).trim() !== '') photosCells.push(v);
+        }
       }
     }
 
@@ -244,6 +250,57 @@ const SheetManager = {
       photos: enrichedPhotos,
       editTime: row[this.COLUMNS.N.index] || ''
     };
+  },
+
+  /**
+   * 從指定列的 M.. 取得 RichText 連結（若有），避免只拿到顯示文字
+   * 回傳陣列（URL 或原始文字）
+   */
+  getPhotoCellsFromSheet: function(sheet, rowIndex, maxCols) {
+    try {
+      if (!sheet || !rowIndex) return null;
+      const cols = maxCols || 8;
+      const startCol = this.COLUMNS.M.index + 1;
+      const range = sheet.getRange(rowIndex, startCol, 1, cols);
+      const values = range.getValues()[0] || [];
+      const rich = range.getRichTextValues()[0] || [];
+
+      const out = [];
+      for (let i = 0; i < cols; i++) {
+        const rv = rich[i];
+        let links = [];
+        try {
+          if (rv) {
+            const runs = rv.getRuns();
+            if (runs && runs.length) {
+              runs.forEach(r => {
+                const link = r.getLinkUrl && r.getLinkUrl();
+                if (link) links.push(link);
+              });
+            } else if (rv.getLinkUrl && rv.getLinkUrl()) {
+              links.push(rv.getLinkUrl());
+            }
+          }
+        } catch (e) {
+          // ignore rich text errors, fallback to value
+          links = [];
+        }
+
+        if (links.length) {
+          links.forEach(u => {
+            if (u && String(u).trim() !== '') out.push(String(u).trim());
+          });
+        } else {
+          const v = values[i];
+          if (v !== undefined && v !== null && String(v).trim() !== '') out.push(v);
+        }
+      }
+
+      return out;
+    } catch (e) {
+      Logger.log('[getPhotoCellsFromSheet] error: ' + e);
+      return null;
+    }
   },
 
   /**
