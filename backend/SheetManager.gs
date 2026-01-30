@@ -693,8 +693,18 @@ const SheetManager = {
       let row = allData[rowIndex - 1] || [];
       if (row.length < requiredCols) for (let i = row.length; i < requiredCols; i++) row[i] = '';
 
-      const existingPhotos = this.parsePhotos(row[this.COLUMNS.M.index]);
-      const filtered = existingPhotos.filter(p => String(p.id) !== String(photoId));
+      // 從 RichText 連結取得實際 URL（避免只拿到顯示文字）
+      const photoCells = this.getPhotoCellsFromSheet(sheet, rowIndex, 8) || [];
+      const existingPhotos = this.parsePhotos(photoCells.length === 1 ? photoCells[0] : photoCells);
+      const targetId = String(photoId);
+      const filtered = existingPhotos.filter(p => {
+        if (!p) return false;
+        if (p.id && String(p.id) === targetId) return false;
+        const url = (p.url || p.webViewLink || '').toString();
+        const inferred = this.inferDriveIdFromUrl(url);
+        if (inferred && String(inferred) === targetId) return false;
+        return true;
+      });
 
       // 寫回 Spreadsheet（M 欄或多欄）
       row[this.COLUMNS.M.index] = this.serializePhotosForSheet(filtered);
@@ -706,6 +716,7 @@ const SheetManager = {
       // 更新多欄顯示
       try {
         const urls = filtered.map(p => (p && p.url) ? String(p.url).trim() : '').filter(Boolean);
+        // 會清空 M.. 範圍
         this.writePhotosAcrossColumns(sheet, rowIndex, urls, 8);
       } catch (e) {
         Logger.log('[removePhotoFromAsset] writePhotosAcrossColumns failed: ' + e);
