@@ -519,15 +519,15 @@ const ui = {
         tryNext();
       };
 
-      // 如果 thumb 有 id，透過 proxy 取得 dataUrl（或 uc fallback）
+      // 如果 thumb 有 id，優先向後端要求縮圖 dataUrl（避免跨網域/權限問題）
       if (g.thumb && g.thumb.id) {
         const cacheKey = `id:${g.thumb.id}`;
         if (this._photoCache[cacheKey]) {
           setThumbSrc(this._photoCache[cacheKey], true);
         } else {
           img.classList.add('loading');
-          // 嘗試從 server 取得 inline preview，若無再 fallback 到 drive uc 或其他可嵌入 URL
-          sheetApi.getPhoto({ fileId: g.thumb.id }).then(async res => {
+          // 直接要求縮圖 (thumb=1) 以提高成功率與降低容量
+          sheetApi.getPhoto({ fileId: g.thumb.id, thumb: 1, maxWidth: 400 }).then(async res => {
             try {
               // helper: normalize server response into a usable src
               const normalizeSrc = (resObj) => {
@@ -606,7 +606,7 @@ const ui = {
             setThumbSrc(this._photoCache[cacheKey], true);
           } else {
             img.classList.add('loading');
-            sheetApi.getPhoto({ fileId: inferredId }).then(async res => {
+            sheetApi.getPhoto({ fileId: inferredId, thumb: 1, maxWidth: 400 }).then(async res => {
               try {
                 const normalizeSrc = (resObj) => {
                   if (!resObj) return null;
