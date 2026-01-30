@@ -100,8 +100,9 @@ const sheetApi = {
         console.debug('[API request] options=', safeOptions);
       } catch (e) { /* ignore debug logging errors */ }
 
-      // 簡單重試機制（最多嘗試 2 次：初次 + 1 次重試），每次會重建 AbortController
-      const MAX_ATTEMPTS = 2;
+      // 簡單重試機制（上傳照片避免重試，以免產生重複檔案）
+      const isUploadPhoto = action === 'uploadPhoto' || (method === 'POST' && data && data.photoBase64);
+      const MAX_ATTEMPTS = isUploadPhoto ? 1 : 2;
       let attempt = 0;
       let response = null;
       while (attempt < MAX_ATTEMPTS) {

@@ -310,7 +310,7 @@ const ui = {
       }
       if (p && typeof p === 'object' && p.url && !p.id) {
         const id = extractDriveId(p.url || p.webViewLink);
-        if (id) p.id = id;
+        if (id) return Object.assign({}, p, { id });
       }
       return p;
     });
@@ -413,7 +413,12 @@ const ui = {
       gallery.appendChild(div);
 
       // 記錄 mapping（thumbId, fullId）以便刪除/檢視使用
-      const mapEntry = { thumbId: g.thumb && g.thumb.id, fullId: g.full && g.full.id, thumbUrl: g.thumb && g.thumb.url, fullUrl: g.full && g.full.url };
+      const mapEntry = {
+        thumbId: (g.thumb && g.thumb.id) ? g.thumb.id : (g.thumb && g.thumb.url ? driveIdFromUrl(g.thumb.url) : null),
+        fullId: (g.full && g.full.id) ? g.full.id : (g.full && g.full.url ? driveIdFromUrl(g.full.url) : null),
+        thumbUrl: g.thumb && g.thumb.url,
+        fullUrl: g.full && g.full.url
+      };
       this._displayPhotoMap.push(mapEntry);
 
       // 若存在原圖（fullId 或 fullUrl 且與 thumb 不相同），在縮圖上顯示小徽章
@@ -578,8 +583,49 @@ const ui = {
         }
 
       } else if (g.thumb && g.thumb.url) {
-        // 直接用可嵌入的 URL
-        setThumbSrc(g.thumb.url, false);
+        // 若有可推導的 Drive fileId，優先走 server proxy（私有檔案較穩）
+        const inferredId = driveIdFromUrl(g.thumb.url);
+        if (inferredId) {
+          const cacheKey = `id:${inferredId}`;
+          if (this._photoCache[cacheKey]) {
+            setThumbSrc(this._photoCache[cacheKey], true);
+          } else {
+            img.classList.add('loading');
+            sheetApi.getPhoto({ fileId: inferredId }).then(res => {
+              try {
+                const normalizeSrc = (resObj) => {
+                  if (!resObj) return null;
+                  if (resObj.dataUrl) {
+                    const d = String(resObj.dataUrl).trim();
+                    if (/^data:\w+\/.+;base64,/.test(d)) return d;
+                    if (/^[A-Za-z0-9+/=\s]+$/.test(d) && d.length > 100) {
+                      return 'data:image/jpeg;base64,' + d.replace(/\s+/g, '');
+                    }
+                    if (/^https?:\/\//i.test(d)) return d;
+                  }
+                  if (resObj.url && /^https?:\/\//i.test(resObj.url)) return resObj.url;
+                  return null;
+                };
+                const normalized = normalizeSrc(res);
+                if (normalized) {
+                  this._photoCache[cacheKey] = normalized;
+                  setThumbSrc(normalized, !!(res && res.dataUrl && /^data:/i.test(res.dataUrl)));
+                  return;
+                }
+              } catch (e) {
+                console.warn('servePhoto processing error (url-only)', e, res);
+              }
+              // fallback to direct URL if proxy fails
+              setThumbSrc(g.thumb.url, false);
+            }).catch(err => {
+              console.warn('servePhoto error (url-only)', err);
+              setThumbSrc(g.thumb.url, false);
+            });
+          }
+        } else {
+          // 直接用可嵌入的 URL
+          setThumbSrc(g.thumb.url, false);
+        }
       } else {
         img.classList.add('broken');
       }
