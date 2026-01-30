@@ -410,6 +410,11 @@ const camera = {
         if (!ui.currentAsset.photos) ui.currentAsset.photos = [];
         // 去重：若已有相同 id 或相同 drive URL，則不要重覆加入
         const newPhoto = result.photo || {};
+        // Attach local preview dataUrl so UI can show immediately (even before sheet save)
+        if (this.capturedPhoto && typeof this.capturedPhoto === 'string') {
+          const prefix = this.capturedPhoto.indexOf('data:') === 0 ? '' : 'data:image/jpeg;base64,';
+          newPhoto.dataUrl = prefix + this.capturedPhoto;
+        }
         const photoKey = (p => {
           if (!p) return null;
           if (p.id) return `id:${p.id}`;
@@ -425,7 +430,18 @@ const camera = {
           const k = (p && p.id) ? `id:${p.id}` : (p && p.url && (p.url.match(/\/d\//) ? `drive:${(p.url.match(/\/d\/([a-zA-Z0-9_-]+)/)||[])[1]}` : String(p.url).split('?')[0]));
           return k && photoKey && k === photoKey;
         });
-        if (!exists) ui.currentAsset.photos.unshift(newPhoto);
+        if (!exists) {
+          ui.currentAsset.photos.unshift(newPhoto);
+        } else {
+          // If duplicate, still attach dataUrl for immediate preview
+          ui.currentAsset.photos = ui.currentAsset.photos.map(p => {
+            const k = (p && p.id) ? `id:${p.id}` : (p && p.url && (p.url.match(/\/d\//) ? `drive:${(p.url.match(/\/d\/([a-zA-Z0-9_-]+)/)||[])[1]}` : String(p.url).split('?')[0]));
+            if (k && photoKey && k === photoKey) {
+              return Object.assign({}, p, { dataUrl: newPhoto.dataUrl || p.dataUrl });
+            }
+            return p;
+          });
+        }
 
         // 關閉預覽視窗並清除暫存（使用者期望畫面消失）
         try { this.closePhotoPreview(); } catch (e) { /* ignore */ }
