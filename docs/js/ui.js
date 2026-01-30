@@ -527,7 +527,7 @@ const ui = {
         } else {
           img.classList.add('loading');
           // 嘗試從 server 取得 inline preview，若無再 fallback 到 drive uc 或其他可嵌入 URL
-          sheetApi.getPhoto({ fileId: g.thumb.id }).then(res => {
+          sheetApi.getPhoto({ fileId: g.thumb.id }).then(async res => {
             try {
               // helper: normalize server response into a usable src
               const normalizeSrc = (resObj) => {
@@ -551,6 +551,21 @@ const ui = {
                 this._photoCache[cacheKey] = normalized;
                 setThumbSrc(normalized, !!(res && res.dataUrl && /^data:/i.test(res.dataUrl)));
                 return;
+              }
+
+              // 若原圖過大，嘗試由 server 產生縮圖
+              if (res && res.error === 'file_too_large_for_inline_preview') {
+                try {
+                  const thumbRes = await sheetApi.getPhoto({ fileId: g.thumb.id, thumb: 1, maxWidth: 400 });
+                  const thumbNorm = normalizeSrc(thumbRes);
+                  if (thumbNorm) {
+                    this._photoCache[cacheKey] = thumbNorm;
+                    setThumbSrc(thumbNorm, true);
+                    return;
+                  }
+                } catch (e) {
+                  console.debug('[servePhoto] thumb resize failed', e);
+                }
               }
 
               // 最後備援：先試 Drive thumbnail，再試 uc 連結
@@ -591,7 +606,7 @@ const ui = {
             setThumbSrc(this._photoCache[cacheKey], true);
           } else {
             img.classList.add('loading');
-            sheetApi.getPhoto({ fileId: inferredId }).then(res => {
+            sheetApi.getPhoto({ fileId: inferredId }).then(async res => {
               try {
                 const normalizeSrc = (resObj) => {
                   if (!resObj) return null;
@@ -611,6 +626,20 @@ const ui = {
                   this._photoCache[cacheKey] = normalized;
                   setThumbSrc(normalized, !!(res && res.dataUrl && /^data:/i.test(res.dataUrl)));
                   return;
+                }
+
+                if (res && res.error === 'file_too_large_for_inline_preview') {
+                  try {
+                    const thumbRes = await sheetApi.getPhoto({ fileId: inferredId, thumb: 1, maxWidth: 400 });
+                    const thumbNorm = normalizeSrc(thumbRes);
+                    if (thumbNorm) {
+                      this._photoCache[cacheKey] = thumbNorm;
+                      setThumbSrc(thumbNorm, true);
+                      return;
+                    }
+                  } catch (e) {
+                    console.warn('servePhoto thumb resize failed (url-only)', e);
+                  }
                 }
               } catch (e) {
                 console.warn('servePhoto processing error (url-only)', e, res);

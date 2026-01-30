@@ -434,6 +434,9 @@ function handleServePhoto(params) {
   try {
     const fileId = params && params.fileId ? String(params.fileId) : null;
     const code = params && params.code ? String(params.code) : null;
+    const thumbFlag = params && (String(params.thumb || '').toLowerCase() === '1' || String(params.thumb || '').toLowerCase() === 'true');
+    const maxWidth = params && params.maxWidth ? parseInt(params.maxWidth, 10) : 600;
+    const maxHeight = params && params.maxHeight ? parseInt(params.maxHeight, 10) : null;
 
     let targetFileId = fileId;
     if (!targetFileId && code) {
@@ -457,16 +460,35 @@ function handleServePhoto(params) {
 
     // 保護：限制可內嵌的最大大小（避免一次回傳非常大的二進位）
     const MAX_INLINE_BYTES = 2.5 * 1024 * 1024; // 2.5MB
-    if (size > MAX_INLINE_BYTES) {
+    if (!thumbFlag && size > MAX_INLINE_BYTES) {
       return sendResponse({ success: false, error: 'file_too_large_for_inline_preview', size: size }, 413);
     }
 
-    const blob = file.getBlob();
+    let blob = file.getBlob();
+    if (thumbFlag) {
+      try {
+        const img = ImagesService.openImage(blob);
+        let resized = img;
+        if (maxWidth || maxHeight) {
+          resized = img.resize(maxWidth || img.getWidth(), maxHeight || img.getHeight());
+        }
+        blob = resized.getBlob().setName(file.getName());
+        // 若縮圖仍過大，嘗試再縮小一次
+        if (blob.getBytes().length > MAX_INLINE_BYTES) {
+          const smaller = resized.resize(300, 300);
+          blob = smaller.getBlob().setName(file.getName());
+        }
+      } catch (e) {
+        Logger.log('[handleServePhoto] resize failed, fallback to original blob: ' + e);
+        blob = file.getBlob();
+      }
+    }
+
     const bytes = blob.getBytes();
     const b64 = Utilities.base64Encode(bytes);
     const dataUrl = 'data:' + mime + ';base64,' + b64;
 
-    return sendResponse({ success: true, dataUrl: dataUrl, mime: mime, size: size });
+    return sendResponse({ success: true, dataUrl: dataUrl, mime: mime, size: bytes.length, resized: !!thumbFlag });
   } catch (err) {
     Logger.log('[handleServePhoto] error: ' + err);
     return sendResponse({ success: false, error: err.toString() }, 500);
