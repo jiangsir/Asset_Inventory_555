@@ -442,6 +442,14 @@ const ui = {
       const setThumbSrc = (src, servedAsThumbnail) => {
         img.classList.remove('loading');
 
+        // 若是 data:URL，直接使用並終止 fallback，避免再去打 Drive 造成 CORS
+        if (src && /^data:/i.test(src)) {
+          img.onerror = null;
+          img.src = src;
+          img.onclick = () => ui.viewPhotoFull(mapEntry, servedAsThumbnail);
+          return;
+        }
+
         // Build fallback candidate list (prioritize provided src)
         const candidates = [];
         if (src) candidates.push(src);
@@ -529,27 +537,12 @@ const ui = {
           // 直接要求縮圖 (thumb=1) 以提高成功率與降低容量
           sheetApi.getPhoto({ fileId: g.thumb.id, thumb: 1, maxWidth: 400 }).then(async res => {
             try {
-              // helper: normalize server response into a usable src
-              const normalizeSrc = (resObj) => {
-                if (!resObj) return null;
-                if (resObj.dataUrl) {
-                  const d = String(resObj.dataUrl).trim();
-                  if (/^data:\w+\/.+;base64,/.test(d)) return d;
-                  // 如果看起來是純 base64（或 data URI 缺前綴），嘗試補上 JPEG 前綴
-                  if (/^[A-Za-z0-9+/=\s]+$/.test(d) && d.length > 100) {
-                    return 'data:image/jpeg;base64,' + d.replace(/\s+/g, '');
-                  }
-                  // 如果 server 回傳的是 URL 字串
-                  if (/^https?:\/\//i.test(d)) return d;
-                }
-                if (resObj.url && /^https?:\/\//i.test(resObj.url)) return resObj.url;
-                return null;
-              };
-
-              const normalized = normalizeSrc(res);
-              if (normalized) {
-                this._photoCache[cacheKey] = normalized;
-                setThumbSrc(normalized, !!(res && res.dataUrl && /^data:/i.test(res.dataUrl)));
+              // 若後端已回傳 dataUrl，直接使用並快取，不再嘗試其他來源
+              if (res && res.success && res.dataUrl) {
+                const d = String(res.dataUrl).trim();
+                const dataSrc = /^data:/i.test(d) ? d : ('data:image/jpeg;base64,' + d.replace(/^data:/i, ''));
+                this._photoCache[cacheKey] = dataSrc;
+                setThumbSrc(dataSrc, true);
                 return;
               }
 
@@ -557,10 +550,11 @@ const ui = {
               if (res && res.error === 'file_too_large_for_inline_preview') {
                 try {
                   const thumbRes = await sheetApi.getPhoto({ fileId: g.thumb.id, thumb: 1, maxWidth: 400 });
-                  const thumbNorm = normalizeSrc(thumbRes);
-                  if (thumbNorm) {
-                    this._photoCache[cacheKey] = thumbNorm;
-                    setThumbSrc(thumbNorm, true);
+                  if (thumbRes && thumbRes.success && thumbRes.dataUrl) {
+                    const d2 = String(thumbRes.dataUrl).trim();
+                    const dataSrc2 = /^data:/i.test(d2) ? d2 : ('data:image/jpeg;base64,' + d2.replace(/^data:/i, ''));
+                    this._photoCache[cacheKey] = dataSrc2;
+                    setThumbSrc(dataSrc2, true);
                     return;
                   }
                 } catch (e) {
@@ -608,33 +602,22 @@ const ui = {
             img.classList.add('loading');
             sheetApi.getPhoto({ fileId: inferredId, thumb: 1, maxWidth: 400 }).then(async res => {
               try {
-                const normalizeSrc = (resObj) => {
-                  if (!resObj) return null;
-                  if (resObj.dataUrl) {
-                    const d = String(resObj.dataUrl).trim();
-                    if (/^data:\w+\/.+;base64,/.test(d)) return d;
-                    if (/^[A-Za-z0-9+/=\s]+$/.test(d) && d.length > 100) {
-                      return 'data:image/jpeg;base64,' + d.replace(/\s+/g, '');
-                    }
-                    if (/^https?:\/\//i.test(d)) return d;
-                  }
-                  if (resObj.url && /^https?:\/\//i.test(resObj.url)) return resObj.url;
-                  return null;
-                };
-                const normalized = normalizeSrc(res);
-                if (normalized) {
-                  this._photoCache[cacheKey] = normalized;
-                  setThumbSrc(normalized, !!(res && res.dataUrl && /^data:/i.test(res.dataUrl)));
+                if (res && res.success && res.dataUrl) {
+                  const d = String(res.dataUrl).trim();
+                  const dataSrc = /^data:/i.test(d) ? d : ('data:image/jpeg;base64,' + d.replace(/^data:/i, ''));
+                  this._photoCache[cacheKey] = dataSrc;
+                  setThumbSrc(dataSrc, true);
                   return;
                 }
 
                 if (res && res.error === 'file_too_large_for_inline_preview') {
                   try {
                     const thumbRes = await sheetApi.getPhoto({ fileId: inferredId, thumb: 1, maxWidth: 400 });
-                    const thumbNorm = normalizeSrc(thumbRes);
-                    if (thumbNorm) {
-                      this._photoCache[cacheKey] = thumbNorm;
-                      setThumbSrc(thumbNorm, true);
+                    if (thumbRes && thumbRes.success && thumbRes.dataUrl) {
+                      const d2 = String(thumbRes.dataUrl).trim();
+                      const dataSrc2 = /^data:/i.test(d2) ? d2 : ('data:image/jpeg;base64,' + d2.replace(/^data:/i, ''));
+                      this._photoCache[cacheKey] = dataSrc2;
+                      setThumbSrc(dataSrc2, true);
                       return;
                     }
                   } catch (e) {
